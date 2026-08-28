@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../../../core/theme/app_colors.dart';
-import '../../../auth/presentation/providers/auth_provider.dart';
 import '../providers/chat_provider.dart';
 
 class ConversationDetailsScreen extends ConsumerWidget {
@@ -27,7 +26,6 @@ class ConversationDetailsScreen extends ConsumerWidget {
           }
 
           final members = data['members'] as List? ?? [];
-          final currentUserId = ref.read(currentUserIdProvider);
 
           return SingleChildScrollView(
             child: Column(

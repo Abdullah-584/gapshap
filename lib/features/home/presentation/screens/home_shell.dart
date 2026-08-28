@@ -8,6 +8,7 @@ import '../../../chat/presentation/screens/conversation_list_screen.dart';
 import '../../../contacts/presentation/screens/contacts_screen.dart';
 import '../../../stories/presentation/screens/stories_screen.dart';
 import '../../../profile/presentation/screens/profile_screen.dart';
+import '../../../../shared/services/update_checker.dart';
 
 class HomeShell extends ConsumerStatefulWidget {
   final Widget child;
@@ -19,6 +20,7 @@ class HomeShell extends ConsumerStatefulWidget {
 
 class _HomeShellState extends ConsumerState<HomeShell> {
   int _currentIndex = 0;
+  bool _hasCheckedUpdate = false;
 
   final _screens = const [
     ConversationListScreen(),
@@ -26,6 +28,18 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     ContactsScreen(),
     ProfileScreen(),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    // Check for updates once when the home screen loads
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_hasCheckedUpdate) {
+        _hasCheckedUpdate = true;
+        UpdateChecker.checkOnStartup(context);
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {

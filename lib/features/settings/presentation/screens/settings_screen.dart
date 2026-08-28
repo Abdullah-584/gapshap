@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../../../core/router/app_router.dart';
+import '../../../../shared/services/update_checker.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -93,6 +94,12 @@ class SettingsScreen extends ConsumerWidget {
             title: 'Help',
             subtitle: 'FAQ, contact support',
             onTap: () {},
+          ),
+          _SettingsTile(
+            icon: Icons.system_update_outlined,
+            title: 'Check for Updates',
+            subtitle: 'See if a new version is available',
+            onTap: () => UpdateChecker.checkManually(context),
           ),
           _SettingsTile(
             icon: Icons.info_outline,

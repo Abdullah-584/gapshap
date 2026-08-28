@@ -1,5 +1,5 @@
-import '../../../../core/extensions/context_extensions.dart';
 import 'dart:io';
+import '../../../../core/extensions/context_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -8,7 +8,6 @@ import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/config/app_config.dart';
-import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../../contacts/presentation/providers/contacts_provider.dart';
 import '../providers/chat_provider.dart';
 

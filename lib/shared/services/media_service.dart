@@ -149,7 +149,6 @@ class MediaService {
     validateFile(file, maxSizeBytes: AppConfig.maxFileSizeMB * 1024 * 1024);
 
     // Generate path
-    final ext = path.extension(file.path).replaceAll('.', '');
     final timestamp = DateTime.now().millisecondsSinceEpoch;
     final fileName = path.basename(file.path);
     final storagePath = '$userId/${conversationId ?? "misc"}/$timestamp-$fileName';

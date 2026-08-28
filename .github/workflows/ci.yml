@@ -45,7 +45,7 @@ jobs:
         continue-on-error: true
 
   build-android:
-    name: Build Android
+    name: Build Android APK
     runs-on: ubuntu-latest
     needs: analyze
     
@@ -59,14 +59,91 @@ jobs:
           channel: 'stable'
           cache: true
       
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+      
       - name: Install dependencies
         run: flutter pub get
+      
+      - name: Extract version from pubspec.yaml
+        id: version
+        run: |
+          VERSION=$(grep "^version:" pubspec.yaml | awk '{print $2}')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          BUILD_NUMBER=$(echo $VERSION | cut -d'+' -f2)
+          VERSION_NAME=$(echo $VERSION | cut -d'+' -f1)
+          echo "build_number=$BUILD_NUMBER" >> $GITHUB_OUTPUT
+          echo "version_name=$VERSION_NAME" >> $GITHUB_OUTPUT
       
       - name: Build APK (debug)
         run: flutter build apk --debug
       
-      - name: Upload APK
+      - name: Build APK (release)
+        run: flutter build apk --release
+      
+      - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: gapshap-debug
+          name: gapshap-debug-${{ steps.version.outputs.version }}
           path: build/app/outputs/flutter-apk/app-debug.apk
+      
+      - name: Upload release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: gapshap-release-${{ steps.version.outputs.version }}
+          path: build/app/outputs/flutter-apk/app-release.apk
+
+  release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: build-android
+    if: startsWith(github.ref, 'refs/tags/v')
+    
+    permissions:
+      contents: write
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Download release APK
+        uses: actions/download-artifact@v4
+        with:
+          name: gapshap-release-${{ github.ref_name }}
+          path: artifacts/
+      
+      - name: Download debug APK
+        uses: actions/download-artifact@v4
+        with:
+          name: gapshap-debug-${{ github.ref_name }}
+          path: artifacts/
+        continue-on-error: true
+      
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: "GAPSHAP ${{ github.ref_name }}"
+          body: |
+            ## What's New
+            
+            See the commit history for changes in this release.
+            
+            ## Installation
+            
+            1. Download the APK below
+            2. Open it on your Android device
+            3. Allow "Install from unknown sources" if prompted
+            
+            **Files:**
+            - `gapshap-release.apk` — Optimized release build
+            - `gapshap-debug.apk` — Debug build with extra logging
+          files: |
+            artifacts/gapshap-release.apk
+            artifacts/gapshap-debug.apk
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
