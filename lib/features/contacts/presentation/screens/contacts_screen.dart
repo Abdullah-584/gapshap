@@ -6,6 +6,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/router/app_router.dart';
+import '../../../chat/presentation/providers/chat_provider.dart';
 
 import '../providers/contacts_provider.dart';
 
@@ -147,12 +148,12 @@ class _ContactsScreenState extends ConsumerState<ContactsScreen> {
   }
 }
 
-class _ContactTile extends StatelessWidget {
+class _ContactTile extends ConsumerWidget {
   final dynamic contact;
   const _ContactTile({required this.contact});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return ListTile(
       onTap: () => context.push('/user/${contact.id}'),
       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
@@ -208,8 +209,20 @@ class _ContactTile extends StatelessWidget {
       trailing: IconButton(
         icon: const Icon(Icons.chat_bubble_outline, size: 20),
         onPressed: () async {
-          // Start or open chat with this contact
-          // This would use the conversations provider
+          try {
+            final conversationId = await ref
+                .read(conversationsProvider.notifier)
+                .createDirectConversation(contact.id);
+            if (context.mounted) {
+              context.push('/chat/$conversationId');
+            }
+          } catch (e) {
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Failed to start chat: $e')),
+              );
+            }
+          }
         },
         color: AppColors.primary,
       ),

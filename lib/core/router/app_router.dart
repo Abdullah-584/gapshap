@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -55,31 +54,21 @@ class RouteNames {
   static const mediaViewer = '/media-viewer';
 }
 
-/// Adapter that converts a Stream into a ChangeNotifier so GoRouter
-/// can use it as a refreshListenable.
-class GoRouterRefreshStream extends ChangeNotifier {
-  late final StreamSubscription<dynamic> _subscription;
-
-  GoRouterRefreshStream(Stream<dynamic> stream) {
-    _subscription = stream.asBroadcastStream().listen((_) {
-      notifyListeners();
-    });
-    // Also notify immediately so the first redirect runs
-    notifyListeners();
-  }
-
-  @override
-  void dispose() {
-    _subscription.cancel();
-    super.dispose();
-  }
-}
-
 /// App Router Provider
+///
+/// Uses `ref.listen` (not `ref.watch`) so the GoRouter instance is
+/// created once and never rebuilt. Auth changes trigger
+/// `refreshListenable` which makes GoRouter re-evaluate its redirect
+/// without recreating the router (which would reset navigation state
+/// and cause the splash→login→splash loop).
 final appRouterProvider = Provider<GoRouter>((ref) {
-  // Watch the auth stream provider to get a broadcast stream for refreshListenable
-  final authStream = ref.watch(authStateProvider.stream);
-  final refreshNotifier = GoRouterRefreshStream(authStream);
+  final refreshNotifier = _GoRouterRefreshNotifier();
+
+  // Listen to auth state changes and poke GoRouter to re-evaluate.
+  // `listen` does NOT cause this Provider to rebuild.
+  ref.listen(authStateProvider, (_, __) {
+    refreshNotifier.notify();
+  });
 
   return GoRouter(
     initialLocation: RouteNames.splash,
@@ -87,7 +76,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     refreshListenable: refreshNotifier,
 
     redirect: (context, state) {
-      // Read the current auth state each time redirect runs
       final authState = ref.read(authStateProvider);
       final isAuthenticated = authState.valueOrNull != null;
       final isAuthRoute = state.matchedLocation == RouteNames.login ||
@@ -96,12 +84,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           state.matchedLocation == RouteNames.emailVerification;
       final isSplash = state.matchedLocation == RouteNames.splash;
 
-      // Still loading — stay on splash
-      if (authState.isLoading) {
-        return isSplash ? null : RouteNames.splash;
-      }
+      debugPrint('[GoRouter] redirect: location=${state.matchedLocation} isLoading=${authState.isLoading} isAuthenticated=$isAuthenticated isAuthRoute=$isAuthRoute isSplash=$isSplash');
 
-      // Not authenticated — go to login
+      // Not authenticated — go to login (skip loading check to avoid splash trap)
       if (!isAuthenticated) {
         return isAuthRoute ? null : RouteNames.login;
       }
@@ -284,6 +269,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     ),
   );
 });
+
+/// Lightweight ChangeNotifier that GoRouter watches for redirect refreshes.
+class _GoRouterRefreshNotifier extends ChangeNotifier {
+  void notify() => notifyListeners();
+}
 
 /// Placeholder for routes not yet implemented
 class _PlaceholderScreen extends StatelessWidget {

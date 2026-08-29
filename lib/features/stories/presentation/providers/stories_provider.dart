@@ -19,17 +19,38 @@ class StoriesNotifier extends StateNotifier<AsyncValue<List<Story>>> {
   Future<void> loadStories() async {
     state = const AsyncValue.loading();
     try {
-      // Load stories from the last 24 hours
+      final userId = ref.read(currentUserIdProvider);
       final twentyFourHoursAgo =
           DateTime.now().subtract(const Duration(hours: 24));
 
-      final response = await _client
-          .from('stories')
-          .select('*, user:profiles!stories_user_id_fkey(id, username, display_name, avatar_url)')
-          .gte('created_at', twentyFourHoursAgo.toIso8601String())
-          .order('created_at', ascending: false);
+      List<Map<String, dynamic>> response;
 
-      final stories = (response as List).map((json) {
+      if (userId != null) {
+        // Load own stories + stories from contacts only (WhatsApp-style)
+        // First get contact IDs
+        final contactsResponse = await _client
+            .from('contacts')
+            .select('contact_id')
+            .eq('user_id', userId);
+
+        final contactIds = (contactsResponse as List)
+            .map((c) => c['contact_id'] as String)
+            .toList();
+
+        // Build query: own stories + contact stories
+        final userIds = [userId, ...contactIds];
+
+        response = await _client
+            .from('stories')
+            .select('*, user:profiles!stories_user_id_fkey(id, username, display_name, avatar_url)')
+            .inFilter('user_id', userIds)
+            .gte('created_at', twentyFourHoursAgo.toIso8601String())
+            .order('created_at', ascending: false) as List<Map<String, dynamic>>;
+      } else {
+        response = [];
+      }
+
+      final stories = response.map((json) {
         final user = json['user'] as Map<String, dynamic>?;
         return Story.fromSupabase({
           ...json,
