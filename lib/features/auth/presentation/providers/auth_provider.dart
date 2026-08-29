@@ -4,12 +4,17 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../shared/services/supabase_service.dart';
 import '../../domain/models/app_user.dart';
 
-/// Auth state - wraps the Supabase User
-/// We expose the raw Supabase User from auth state
-/// and our AppProfile from profile state
-final authStateProvider = StreamProvider<User?>((ref) {
+/// Auth state - emits the current user immediately, then listens for changes.
+/// Uses an async generator so the first yield prevents the StreamProvider
+/// from staying stuck in loading when there is no active session.
+final authStateProvider = StreamProvider<User?>((ref) async* {
   final client = ref.watch(supabaseClientProvider);
-  return client.auth.onAuthStateChange.map((event) => event.session?.user);
+  // Emit current user/session right away so isLoading becomes false
+  yield client.auth.currentUser;
+  // Then listen for future auth state changes
+  await for (final event in client.auth.onAuthStateChange) {
+    yield event.session?.user;
+  }
 });
 
 /// Current user ID helper

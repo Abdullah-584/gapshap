@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -54,38 +55,62 @@ class RouteNames {
   static const mediaViewer = '/media-viewer';
 }
 
+/// Adapter that converts a Stream into a ChangeNotifier so GoRouter
+/// can use it as a refreshListenable.
+class GoRouterRefreshStream extends ChangeNotifier {
+  late final StreamSubscription<dynamic> _subscription;
+
+  GoRouterRefreshStream(Stream<dynamic> stream) {
+    _subscription = stream.asBroadcastStream().listen((_) {
+      notifyListeners();
+    });
+    // Also notify immediately so the first redirect runs
+    notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _subscription.cancel();
+    super.dispose();
+  }
+}
+
 /// App Router Provider
 final appRouterProvider = Provider<GoRouter>((ref) {
-  final authState = ref.watch(authStateProvider);
+  // Watch the auth stream provider to get a broadcast stream for refreshListenable
+  final authStream = ref.watch(authStateProvider.stream);
+  final refreshNotifier = GoRouterRefreshStream(authStream);
 
   return GoRouter(
     initialLocation: RouteNames.splash,
     debugLogDiagnostics: true,
-    
+    refreshListenable: refreshNotifier,
+
     redirect: (context, state) {
+      // Read the current auth state each time redirect runs
+      final authState = ref.read(authStateProvider);
       final isAuthenticated = authState.valueOrNull != null;
       final isAuthRoute = state.matchedLocation == RouteNames.login ||
           state.matchedLocation == RouteNames.signup ||
           state.matchedLocation == RouteNames.forgotPassword ||
           state.matchedLocation == RouteNames.emailVerification;
       final isSplash = state.matchedLocation == RouteNames.splash;
-      // Still loading
+
+      // Still loading — stay on splash
       if (authState.isLoading) {
         return isSplash ? null : RouteNames.splash;
       }
 
-      // Not authenticated
+      // Not authenticated — go to login
       if (!isAuthenticated) {
         return isAuthRoute ? null : RouteNames.login;
       }
 
-      // Authenticated but on auth route
+      // Authenticated but on auth route — go to home
       if (isAuthenticated && isAuthRoute) {
         return RouteNames.home;
       }
 
-      // TODO: Check if profile is completed
-      // For now, go to home
       return null;
     },
 

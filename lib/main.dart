@@ -26,11 +26,7 @@ void main() async {
     systemNavigationBarIconBrightness: Brightness.light,
   ));
 
-  // Initialize Hive local cache
-  final cacheService = CacheService();
-  await cacheService.initialize();
-
-  // Initialize Supabase
+  // Initialize Supabase first (required for auth)
   await Supabase.initialize(
     url: AppConfig.supabaseUrl,
     publishableKey: AppConfig.supabaseAnonKey,
@@ -38,6 +34,14 @@ void main() async {
       eventsPerSecond: 2,
     ),
   );
+
+  // Initialize Hive local cache (can fail on some web configs)
+  try {
+    final cacheService = CacheService();
+    await cacheService.initialize();
+  } catch (e) {
+    debugPrint('Hive init failed: $e');
+  }
 
   // Initialize Firebase for push notifications
   try {
