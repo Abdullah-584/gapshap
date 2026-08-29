@@ -1,20 +1,34 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../shared/services/supabase_service.dart';
 import '../../domain/models/app_user.dart';
 
-/// Auth state - emits the current user immediately, then listens for changes.
-/// Uses an async generator so the first yield prevents the StreamProvider
-/// from staying stuck in loading when there is no active session.
-final authStateProvider = StreamProvider<User?>((ref) async* {
-  final client = ref.watch(supabaseClientProvider);
-  // Emit current user/session right away so isLoading becomes false
-  yield client.auth.currentUser;
-  // Then listen for future auth state changes
-  await for (final event in client.auth.onAuthStateChange) {
-    yield event.session?.user;
-  }
+/// Auth state - uses StreamController for reliability.
+/// The async* generator approach can hang if Supabase isn't ready or
+/// if onAuthStateChange never emits. This version always emits immediately.
+final authStateProvider = StreamProvider<User?>((ref) {
+  final controller = StreamController<User?>.broadcast();
+  final client = ref.read(supabaseClientProvider);
+
+  // Emit current user IMMEDIATELY so the app never gets stuck loading
+  controller.add(client.auth.currentUser);
+
+  // Listen for auth state changes
+  final subscription = client.auth.onAuthStateChange.listen((event) {
+    if (!controller.isClosed) {
+      controller.add(event.session?.user);
+    }
+  });
+
+  // Cancel subscription when provider is disposed
+  ref.onDispose(() {
+    subscription.cancel();
+    controller.close();
+  });
+
+  return controller.stream;
 });
 
 /// Current user ID helper

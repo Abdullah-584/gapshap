@@ -2,12 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'core/config/app_config.dart';
 import 'core/theme/app_theme.dart';
 import 'core/router/app_router.dart';
 import 'shared/services/cache_service.dart';
-import 'shared/services/notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -26,31 +24,28 @@ void main() async {
     systemNavigationBarIconBrightness: Brightness.light,
   ));
 
-  // Initialize Supabase first (required for auth)
-  await Supabase.initialize(
-    url: AppConfig.supabaseUrl,
-    publishableKey: AppConfig.supabaseAnonKey,
-    realtimeClientOptions: const RealtimeClientOptions(
-      eventsPerSecond: 2,
-    ),
-  );
-
-  // Initialize Hive local cache (can fail on some web configs)
+  // Initialize Supabase (required for auth)
   try {
-    final cacheService = CacheService();
-    await cacheService.initialize();
+    await Supabase.initialize(
+      url: AppConfig.supabaseUrl,
+      publishableKey: AppConfig.supabaseAnonKey,
+      realtimeClientOptions: const RealtimeClientOptions(
+        eventsPerSecond: 2,
+      ),
+    );
   } catch (e) {
-    debugPrint('Hive init failed: $e');
+    debugPrint('WARNING: Supabase init failed: $e');
   }
 
-  // Initialize Firebase for push notifications
+  // Initialize Hive local cache (can fail — don't block app startup)
   try {
-    await Firebase.initializeApp();
-    final notificationService = NotificationService();
-    await notificationService.initialize();
+    final cacheService = CacheService();
+    await cacheService.initialize().timeout(
+      const Duration(seconds: 5),
+      onTimeout: () {},
+    );
   } catch (e) {
-    // Firebase initialization can fail in dev/web
-    debugPrint('Firebase init failed: $e');
+    debugPrint('Hive init failed (non-blocking): $e');
   }
 
   runApp(

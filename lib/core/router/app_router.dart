@@ -24,13 +24,11 @@ import '../../features/settings/presentation/screens/settings_screen.dart';
 import '../../features/settings/presentation/screens/privacy_settings_screen.dart';
 import '../../features/settings/presentation/screens/blocked_users_screen.dart';
 import '../../features/onboarding/presentation/screens/onboarding_screen.dart';
-import '../widgets/splash_screen.dart';
 
 /// Route names
 class RouteNames {
   RouteNames._();
 
-  static const splash = '/';
   static const login = '/login';
   static const signup = '/signup';
   static const forgotPassword = '/forgot-password';
@@ -56,56 +54,46 @@ class RouteNames {
 
 /// App Router Provider
 ///
-/// Uses `ref.listen` (not `ref.watch`) so the GoRouter instance is
-/// created once and never rebuilt. Auth changes trigger
-/// `refreshListenable` which makes GoRouter re-evaluate its redirect
-/// without recreating the router (which would reset navigation state
-/// and cause the splash→login→splash loop).
+/// Uses `ref.listen` (not `ref.watch`) so GoRouter is created once.
+/// Auth changes trigger refreshListenable → GoRouter re-evaluates redirect
+/// without recreating the router.
 final appRouterProvider = Provider<GoRouter>((ref) {
   final refreshNotifier = _GoRouterRefreshNotifier();
 
   // Listen to auth state changes and poke GoRouter to re-evaluate.
-  // `listen` does NOT cause this Provider to rebuild.
   ref.listen(authStateProvider, (_, __) {
     refreshNotifier.notify();
   });
 
   return GoRouter(
-    initialLocation: RouteNames.splash,
-    debugLogDiagnostics: true,
+    initialLocation: RouteNames.login,
+    debugLogDiagnostics: false,
     refreshListenable: refreshNotifier,
 
     redirect: (context, state) {
       final authState = ref.read(authStateProvider);
       final isAuthenticated = authState.valueOrNull != null;
-      final isAuthRoute = state.matchedLocation == RouteNames.login ||
-          state.matchedLocation == RouteNames.signup ||
-          state.matchedLocation == RouteNames.forgotPassword ||
-          state.matchedLocation == RouteNames.emailVerification;
-      final isSplash = state.matchedLocation == RouteNames.splash;
+      final location = state.matchedLocation;
 
-      debugPrint('[GoRouter] redirect: location=${state.matchedLocation} isLoading=${authState.isLoading} isAuthenticated=$isAuthenticated isAuthRoute=$isAuthRoute isSplash=$isSplash');
+      // Auth routes — redirect to home if already logged in
+      final isAuthRoute = location == RouteNames.login ||
+          location == RouteNames.signup ||
+          location == RouteNames.forgotPassword ||
+          location == RouteNames.emailVerification;
 
-      // Not authenticated — go to login (skip loading check to avoid splash trap)
-      if (!isAuthenticated) {
-        return isAuthRoute ? null : RouteNames.login;
-      }
-
-      // Authenticated but on auth route — go to home
       if (isAuthenticated && isAuthRoute) {
         return RouteNames.home;
       }
 
-      return null;
+      // Not authenticated — must be on an auth route
+      if (!isAuthenticated && !isAuthRoute) {
+        return RouteNames.login;
+      }
+
+      return null; // No redirect needed
     },
 
     routes: [
-      // Splash
-      GoRoute(
-        path: RouteNames.splash,
-        builder: (context, state) => const SplashScreen(),
-      ),
-
       // Auth Routes
       GoRoute(
         path: RouteNames.login,
@@ -270,7 +258,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   );
 });
 
-/// Lightweight ChangeNotifier that GoRouter watches for redirect refreshes.
+/// Lightweight ChangeNotifier for GoRouter refreshListenable.
 class _GoRouterRefreshNotifier extends ChangeNotifier {
   void notify() => notifyListeners();
 }
