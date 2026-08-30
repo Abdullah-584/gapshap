@@ -8,6 +8,9 @@ import '../../features/auth/presentation/screens/signup_screen.dart';
 import '../../features/auth/presentation/screens/forgot_password_screen.dart';
 import '../../features/auth/presentation/screens/email_verification_screen.dart';
 import '../../features/home/presentation/screens/home_shell.dart';
+import '../../features/chat/presentation/screens/conversation_list_screen.dart';
+import '../../features/stories/presentation/screens/stories_screen.dart';
+import '../../features/contacts/presentation/screens/contacts_screen.dart';
 import '../../features/chat/presentation/screens/chat_screen.dart';
 import '../../features/chat/presentation/screens/conversation_details_screen.dart';
 import '../../features/chat/presentation/screens/message_search_screen.dart';
@@ -66,7 +69,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   });
 
   return GoRouter(
-    initialLocation: RouteNames.home,
+    initialLocation: RouteNames.login,
     debugLogDiagnostics: false,
     refreshListenable: refreshNotifier,
 
@@ -82,7 +85,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           location == RouteNames.emailVerification;
 
       if (isAuthenticated && isAuthRoute) {
-        return RouteNames.home; // Redirects to first ShellRoute child
+        return RouteNames.home;
       }
 
       // Not authenticated — must be on an auth route
@@ -119,28 +122,27 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
 
       // Home Shell (with bottom nav)
-      // Note: HomeShell manages its own child routing internally.
-      // The child from ShellRoute is passed to HomeShell but currently unused;
-      // HomeShell renders screens via its own _currentIndex state.
+      // HomeShell uses the `child` parameter from ShellRoute to render
+      // the correct screen based on GoRouter's current location.
       ShellRoute(
         builder: (context, state, child) => HomeShell(child: child),
         routes: [
           GoRoute(
             path: '/chats',
             pageBuilder: (context, state) => const NoTransitionPage(
-              child: _PlaceholderScreen(title: 'Chats'),
+              child: ConversationListScreen(),
             ),
           ),
           GoRoute(
             path: '/stories',
             pageBuilder: (context, state) => const NoTransitionPage(
-              child: _PlaceholderScreen(title: 'Stories'),
+              child: StoriesScreen(),
             ),
           ),
           GoRoute(
             path: '/contacts',
             pageBuilder: (context, state) => const NoTransitionPage(
-              child: _PlaceholderScreen(title: 'Contacts'),
+              child: ContactsScreen(),
             ),
           ),
           GoRoute(
@@ -266,15 +268,4 @@ class _GoRouterRefreshNotifier extends ChangeNotifier {
   void notify() => notifyListeners();
 }
 
-/// Placeholder for routes not yet implemented
-class _PlaceholderScreen extends StatelessWidget {
-  final String title;
-  const _PlaceholderScreen({required this.title});
 
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Text(title, style: Theme.of(context).textTheme.headlineMedium),
-    );
-  }
-}

@@ -4,14 +4,25 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../core/theme/app_colors.dart';
 
-import '../../../chat/presentation/screens/conversation_list_screen.dart';
-import '../../../contacts/presentation/screens/contacts_screen.dart';
-import '../../../stories/presentation/screens/stories_screen.dart';
-import '../../../profile/presentation/screens/profile_screen.dart';
 import '../../../../shared/services/update_checker.dart';
 
 /// Tab index → GoRouter path mapping
 const _tabPaths = ['/chats', '/stories', '/contacts', '/profile-tab'];
+
+/// Tab icons
+const _outlinedIcons = [
+  Icons.chat_bubble_outline,
+  Icons.circle_outlined,
+  Icons.people_outline,
+  Icons.person_outline,
+];
+const _filledIcons = [
+  Icons.chat_bubble,
+  Icons.circle,
+  Icons.people,
+  Icons.person,
+];
+const _tabLabels = ['Chats', 'Stories', 'Contacts', 'Profile'];
 
 class HomeShell extends ConsumerStatefulWidget {
   final Widget child;
@@ -22,20 +33,11 @@ class HomeShell extends ConsumerStatefulWidget {
 }
 
 class _HomeShellState extends ConsumerState<HomeShell> {
-  int _currentIndex = 0;
   bool _hasCheckedUpdate = false;
-
-  final _screens = const [
-    ConversationListScreen(),
-    StoriesScreen(),
-    ContactsScreen(),
-    ProfileScreen(),
-  ];
 
   @override
   void initState() {
     super.initState();
-    // Check for updates once when the home screen loads
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_hasCheckedUpdate) {
         _hasCheckedUpdate = true;
@@ -44,24 +46,24 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     });
   }
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    // Sync tab index from GoRouter location (handles back button / deep links)
+  /// Derive the selected tab index from the current GoRouter location.
+  int get _currentIndex {
     final location = GoRouterState.of(context).matchedLocation;
     final idx = _tabPaths.indexOf(location);
-    if (idx != -1 && idx != _currentIndex) {
-      setState(() => _currentIndex = idx);
-    }
+    return idx >= 0 ? idx : 0;
   }
 
   @override
   Widget build(BuildContext context) {
+    final currentIndex = _currentIndex;
+
     return Scaffold(
       backgroundColor: AppColors.backgroundDark,
+      // The `child` parameter comes from GoRouter and renders the
+      // correct screen based on the current route (/chats, /stories, etc.)
       body: AnimatedSwitcher(
         duration: const Duration(milliseconds: 250),
-        child: _screens[_currentIndex],
+        child: widget.child,
       ),
       bottomNavigationBar: Container(
         decoration: const BoxDecoration(
@@ -75,12 +77,16 @@ class _HomeShellState extends ConsumerState<HomeShell> {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _buildNavItem(0, Icons.chat_bubble_outline, Icons.chat_bubble, 'Chats'),
-                _buildNavItem(1, Icons.circle_outlined, Icons.circle, 'Stories'),
-                _buildNavItem(2, Icons.people_outline, Icons.people, 'Contacts'),
-                _buildNavItem(3, Icons.person_outline, Icons.person, 'Profile'),
-              ],
+              children: List.generate(4, (index) {
+                return _buildNavItem(
+                  context,
+                  index,
+                  currentIndex,
+                  _outlinedIcons[index],
+                  _filledIcons[index],
+                  _tabLabels[index],
+                );
+              }),
             ),
           ),
         ),
@@ -88,11 +94,18 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     );
   }
 
-  Widget _buildNavItem(int index, IconData outlinedIcon, IconData filledIcon, String label) {
-    final isSelected = _currentIndex == index;
+  Widget _buildNavItem(
+    BuildContext context,
+    int index,
+    int currentIndex,
+    IconData outlinedIcon,
+    IconData filledIcon,
+    String label,
+  ) {
+    final isSelected = currentIndex == index;
     return GestureDetector(
       onTap: () {
-        setState(() => _currentIndex = index);
+        // Navigate via GoRouter so the URL stays in sync
         context.go(_tabPaths[index]);
       },
       behavior: HitTestBehavior.opaque,
@@ -117,7 +130,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
               const SizedBox(width: 8),
               Text(
                 label,
-                style: TextStyle(
+                style: const TextStyle(
                   color: AppColors.primary,
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
