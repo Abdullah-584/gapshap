@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -707,10 +708,24 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
     try {
       final mediaService = ref.read(mediaServiceProvider);
-      final result = await mediaService.uploadImage(
-        File(image.path),
-        conversationId: widget.conversationId,
-      );
+      MediaUploadResult result;
+
+      if (kIsWeb) {
+        // Web: read as bytes, upload directly (no dart:io File)
+        final bytes = await image.readAsBytes();
+        result = await mediaService.uploadImageBytes(
+          bytes,
+          conversationId: widget.conversationId,
+          fileName: image.name,
+          mimeType: image.mimeType,
+        );
+      } else {
+        // Mobile: use dart:io File for compression
+        result = await mediaService.uploadImage(
+          File(image.path),
+          conversationId: widget.conversationId,
+        );
+      }
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
@@ -751,12 +766,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   }
 
   Future<void> _pickFile() async {
-    final files = await FilePicker.pickFiles(type: FileType.any);
+    final result = await FilePicker.pickFiles(type: FileType.any);
 
-    if (files.isEmpty || !mounted) return;
+    if (result.isEmpty || !mounted) return;
 
-    final file = files.first;
-    if (file.path == null) return;
+    final file = result.first;
+    final fileSize = await file.length();
+    if (!mounted) return;
 
     // Show uploading indicator
     ScaffoldMessenger.of(context).showSnackBar(
@@ -778,10 +794,26 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
     try {
       final mediaService = ref.read(mediaServiceProvider);
-      final result = await mediaService.uploadFile(
-        File(file.path!),
-        conversationId: widget.conversationId,
-      );
+      MediaUploadResult uploadResult;
+
+      if (kIsWeb) {
+        // Web: read bytes via readAsBytes()
+        final bytes = await file.readAsBytes();
+
+        uploadResult = await mediaService.uploadFileBytes(
+          bytes,
+          conversationId: widget.conversationId,
+          fileName: file.name,
+          mimeType: lookupMimeType(file.name),
+        );
+      } else {
+        // Mobile: use dart:io File
+        if (file.path == null) throw Exception('No file path');
+        uploadResult = await mediaService.uploadFile(
+          File(file.path!),
+          conversationId: widget.conversationId,
+        );
+      }
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
@@ -790,10 +822,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       await ref
           .read(messagesProvider(widget.conversationId).notifier)
           .sendFileMessage(
-            attachmentUrl: result.url,
+            attachmentUrl: uploadResult.url,
             attachmentName: file.name,
-            attachmentMimeType: lookupMimeType(file.path!),
-            attachmentSize: await file.length(),
+            attachmentMimeType: lookupMimeType(file.name),
+            attachmentSize: fileSize,
             replyToMessageId: _replyingTo?.id,
             replyToContent: _replyingTo?.content,
             replyToSenderName: _replyingTo?.senderName,

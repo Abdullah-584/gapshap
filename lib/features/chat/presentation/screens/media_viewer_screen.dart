@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:photo_view/photo_view.dart';
 import 'package:photo_view/photo_view_gallery.dart';
@@ -38,7 +39,9 @@ class MediaViewerScreen extends StatelessWidget {
               builder: (context, index) {
                 return PhotoViewGalleryPageOptions(
                   imageProvider: isLocal
-                      ? FileImage(File(imageUrl))
+                      ? (kIsWeb
+                          ? NetworkImage(imageUrl) as ImageProvider
+                          : FileImage(File(imageUrl)) as ImageProvider)
                       : CachedNetworkImageProvider(imageUrl),
                   initialScale: PhotoViewComputedScale.contained,
                   minScale: PhotoViewComputedScale.contained,

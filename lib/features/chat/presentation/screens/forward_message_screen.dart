@@ -7,6 +7,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../../../../core/theme/app_colors.dart';
 
 import '../providers/chat_provider.dart';
+import '../../domain/models/conversation.dart';
 
 class ForwardMessageScreen extends ConsumerStatefulWidget {
   final String messageId;
@@ -83,12 +84,12 @@ class _ForwardMessageScreenState extends ConsumerState<ForwardMessageScreen> {
                   itemCount: list.length,
                   itemBuilder: (context, index) {
                     final convo = list[index];
-                    final name = convo.type.name == 'group'
+                    final name = convo.type == ConversationType.group
                         ? (convo.name ?? 'Group')
                         : (convo.otherDisplayName ??
                             convo.otherUsername ??
                             'Unknown');
-                    final avatar = convo.type.name == 'group'
+                    final avatar = convo.type == ConversationType.group
                         ? convo.avatarUrl
                         : convo.otherAvatarUrl;
 

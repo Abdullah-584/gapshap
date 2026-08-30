@@ -1,5 +1,6 @@
 import '../../../../core/extensions/context_extensions.dart';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -20,6 +21,7 @@ class CreateStoryScreen extends ConsumerStatefulWidget {
 class _CreateStoryScreenState extends ConsumerState<CreateStoryScreen> {
   StoryType _selectedType = StoryType.text;
   String? _mediaPath;
+  Uint8List? _mediaBytes;
   
   final _captionController = TextEditingController();
   final _textController = TextEditingController();
@@ -50,8 +52,10 @@ class _CreateStoryScreenState extends ConsumerState<CreateStoryScreen> {
     if (type == StoryType.image) {
       final image = await picker.pickImage(source: source, imageQuality: 80);
       if (image != null) {
+        final bytes = kIsWeb ? await image.readAsBytes() : null;
         setState(() {
-          _mediaPath = image.path;
+          _mediaPath = kIsWeb ? image.name : image.path;
+          _mediaBytes = bytes;
           _selectedType = StoryType.image;
         });
       }
@@ -61,8 +65,10 @@ class _CreateStoryScreenState extends ConsumerState<CreateStoryScreen> {
         maxDuration: const Duration(seconds: 30),
       );
       if (video != null) {
+        final bytes = kIsWeb ? await video.readAsBytes() : null;
         setState(() {
-          _mediaPath = video.path;
+          _mediaPath = kIsWeb ? video.name : video.path;
+          _mediaBytes = bytes;
           _selectedType = StoryType.video;
         });
       }
@@ -78,16 +84,22 @@ class _CreateStoryScreenState extends ConsumerState<CreateStoryScreen> {
 
     final ext = _mediaPath!.split('.').last;
     final path = '$userId/${DateTime.now().millisecondsSinceEpoch}.$ext';
-    final bucket = _selectedType == StoryType.video
-        ? AppConfig.storyMediaBucket
-        : AppConfig.storyMediaBucket;
+    final bucket = AppConfig.storyMediaBucket;
 
     try {
-      await client.storage.from(bucket).upload(
-            path,
-            File(_mediaPath!),
-            fileOptions: const FileOptions(upsert: false),
-          );
+      if (kIsWeb && _mediaBytes != null) {
+        await client.storage.from(bucket).uploadBinary(
+              path,
+              _mediaBytes!,
+              fileOptions: const FileOptions(upsert: false),
+            );
+      } else {
+        await client.storage.from(bucket).upload(
+              path,
+              File(_mediaPath!),
+              fileOptions: const FileOptions(upsert: false),
+            );
+      }
 
       final url = client.storage.from(bucket).getPublicUrl(path);
       return url;
@@ -341,11 +353,11 @@ class _CreateStoryScreenState extends ConsumerState<CreateStoryScreen> {
       margin: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
-        image: DecorationImage(
-          image: FileImage(File(_mediaPath!)),
-          fit: BoxFit.cover,
-        ),
       ),
+      clipBehavior: Clip.antiAlias,
+      child: _mediaBytes != null
+          ? Image.memory(_mediaBytes!, fit: BoxFit.cover)
+          : (!kIsWeb ? Image.file(File(_mediaPath!), fit: BoxFit.cover) : const SizedBox.shrink()),
     );
   }
 }

@@ -1,5 +1,6 @@
 import '../../../../core/extensions/context_extensions.dart';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -25,7 +26,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   bool _isLoading = false;
   bool _isCheckingUsername = false;
   bool? _isUsernameAvailable;
-  File? _avatarFile;
+  XFile? _avatarXFile;
+  Uint8List? _avatarBytes;
   
 
   @override
@@ -45,7 +47,11 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       imageQuality: 80,
     );
     if (image != null) {
-      setState(() => _avatarFile = File(image.path));
+      final bytes = kIsWeb ? await image.readAsBytes() : null;
+      setState(() {
+        _avatarXFile = image;
+        _avatarBytes = bytes;
+      });
     }
   }
 
@@ -58,26 +64,39 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       imageQuality: 80,
     );
     if (image != null) {
-      setState(() => _avatarFile = File(image.path));
+      final bytes = kIsWeb ? await image.readAsBytes() : null;
+      setState(() {
+        _avatarXFile = image;
+        _avatarBytes = bytes;
+      });
     }
   }
 
   Future<String?> _uploadAvatar() async {
-    if (_avatarFile == null) return null;
+    if (_avatarXFile == null) return null;
 
     final client = Supabase.instance.client;
     final userId = client.auth.currentUser?.id;
     if (userId == null) return null;
 
-    final ext = _avatarFile!.path.split('.').last;
+    final fileName = _avatarXFile!.name;
+    final ext = fileName.split('.').last;
     final path = '$userId/avatar.$ext';
 
     try {
-      await client.storage.from(AppConfig.avatarsBucket).upload(
-            path,
-            _avatarFile!,
-            fileOptions: const FileOptions(upsert: true),
-          );
+      if (kIsWeb && _avatarBytes != null) {
+        await client.storage.from(AppConfig.avatarsBucket).uploadBinary(
+              path,
+              _avatarBytes!,
+              fileOptions: const FileOptions(upsert: true),
+            );
+      } else {
+        await client.storage.from(AppConfig.avatarsBucket).upload(
+              path,
+              File(_avatarXFile!.path),
+              fileOptions: const FileOptions(upsert: true),
+            );
+      }
 
       final url =
           client.storage.from(AppConfig.avatarsBucket).getPublicUrl(path);
@@ -117,7 +136,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 
     try {
       String? avatarUrl;
-      if (_avatarFile != null) {
+      if (_avatarXFile != null) {
         avatarUrl = await _uploadAvatar();
       }
 
@@ -186,14 +205,21 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                             color: AppColors.primary.withValues(alpha: 0.3),
                             width: 3,
                           ),
-                          image: _avatarFile != null
-                              ? DecorationImage(
-                                  image: FileImage(_avatarFile!),
-                                  fit: BoxFit.cover,
-                                )
+                          image: _avatarXFile != null
+                              ? (_avatarBytes != null
+                                  ? DecorationImage(
+                                      image: MemoryImage(_avatarBytes!),
+                                      fit: BoxFit.cover,
+                                    )
+                                  : (!kIsWeb
+                                      ? DecorationImage(
+                                          image: FileImage(File(_avatarXFile!.path)),
+                                          fit: BoxFit.cover,
+                                        )
+                                      : null))
                               : null,
                         ),
-                        child: _avatarFile == null
+                        child: _avatarXFile == null
                             ? const Icon(
                                 Icons.camera_alt,
                                 size: 40,

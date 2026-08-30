@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import '../../../../core/extensions/context_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -22,7 +23,8 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
   final _nameController = TextEditingController();
   final _searchController = TextEditingController();
   final Set<String> _selectedMemberIds = {};
-  File? _avatarFile;
+  XFile? _avatarXFile;
+  Uint8List? _avatarBytes;
   bool _isLoading = false;
   List<dynamic> _contacts = [];
 
@@ -53,25 +55,39 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
       imageQuality: 80,
     );
     if (image != null) {
-      setState(() => _avatarFile = File(image.path));
+      final bytes = kIsWeb ? await image.readAsBytes() : null;
+      setState(() {
+        _avatarXFile = image;
+        _avatarBytes = bytes;
+      });
     }
   }
 
   Future<String?> _uploadAvatar() async {
-    if (_avatarFile == null) return null;
+    if (_avatarXFile == null) return null;
     final client = Supabase.instance.client;
     final userId = client.auth.currentUser?.id;
     if (userId == null) return null;
 
-    final ext = _avatarFile!.path.split('.').last;
+    final fileName = _avatarXFile!.name;
+    final ext = fileName.split('.').last;
     final path = '$userId/groups/${DateTime.now().millisecondsSinceEpoch}.$ext';
 
     try {
-      await client.storage.from(AppConfig.avatarsBucket).upload(
-            path,
-            _avatarFile!,
-            fileOptions: const FileOptions(upsert: true),
-          );
+      if (kIsWeb) {
+        final bytes = await _avatarXFile!.readAsBytes();
+        await client.storage.from(AppConfig.avatarsBucket).uploadBinary(
+              path,
+              bytes,
+              fileOptions: const FileOptions(upsert: true),
+            );
+      } else {
+        await client.storage.from(AppConfig.avatarsBucket).upload(
+              path,
+              File(_avatarXFile!.path),
+              fileOptions: const FileOptions(upsert: true),
+            );
+      }
       return client.storage.from(AppConfig.avatarsBucket).getPublicUrl(path);
     } catch (_) {
       return null;
@@ -92,7 +108,7 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
 
     try {
       String? avatarUrl;
-      if (_avatarFile != null) {
+      if (_avatarXFile != null) {
         avatarUrl = await _uploadAvatar();
       }
 
@@ -166,10 +182,13 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
                           shape: BoxShape.circle,
                           color: AppColors.surfaceDark,
                         ),
-                        child: _avatarFile != null
+                        child: _avatarXFile != null
                             ? ClipOval(
-                                child: Image.file(_avatarFile!,
-                                    fit: BoxFit.cover))
+                                child: _avatarBytes != null
+                                    ? Image.memory(_avatarBytes!, fit: BoxFit.cover)
+                                    : (!kIsWeb
+                                        ? Image.file(File(_avatarXFile!.path), fit: BoxFit.cover)
+                                        : const Icon(Icons.group, color: AppColors.textSecondaryDark, size: 28)))
                             : const Icon(Icons.group,
                                 color: AppColors.textSecondaryDark, size: 28),
                       ),

@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:image/image.dart' as img;
@@ -218,6 +219,99 @@ class MediaService {
       );
     } catch (e) {
       throw AppException.uploadFailed('Failed to upload voice message');
+    }
+  }
+
+  /// Upload image from bytes (web-safe, no dart:io)
+  Future<MediaUploadResult> uploadImageBytes(
+    Uint8List bytes, {
+    String bucket = AppConfig.chatMediaBucket,
+    String? conversationId,
+    String fileName = 'image.jpg',
+    String? mimeType,
+  }) async {
+    final userId = _client.auth.currentUser?.id;
+    if (userId == null) throw AppException.unauthorized();
+
+    // Try to compress on native; skip on web
+    Uint8List uploadBytes = bytes;
+    if (!kIsWeb) {
+      try {
+        final image = img.decodeImage(bytes);
+        if (image != null) {
+          final resized = image.width > 1920
+              ? img.copyResize(image, width: 1920)
+              : image;
+          uploadBytes = Uint8List.fromList(img.encodeJpg(resized, quality: 80));
+        }
+      } catch (_) {
+        uploadBytes = bytes; // fallback to original
+      }
+    }
+
+    final ext = path.extension(fileName).replaceAll('.', '');
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    final storagePath = '$userId/${conversationId ?? "misc"}/$timestamp.$ext';
+    final contentType = mimeType ?? 'image/${ext.isEmpty ? 'jpg' : ext}';
+
+    try {
+      await _client.storage.from(bucket).uploadBinary(
+            storagePath,
+            uploadBytes,
+            fileOptions: FileOptions(
+              upsert: true,
+              contentType: contentType,
+            ),
+          );
+
+      final url = _client.storage.from(bucket).getPublicUrl(storagePath);
+
+      return MediaUploadResult(
+        url: url,
+        path: storagePath,
+        fileSize: uploadBytes.length,
+        mimeType: contentType,
+      );
+    } catch (e) {
+      throw AppException.uploadFailed('Failed to upload image');
+    }
+  }
+
+  /// Upload file from bytes (web-safe, no dart:io)
+  Future<MediaUploadResult> uploadFileBytes(
+    Uint8List bytes, {
+    String bucket = AppConfig.documentsBucket,
+    String? conversationId,
+    required String fileName,
+    String? mimeType,
+  }) async {
+    final userId = _client.auth.currentUser?.id;
+    if (userId == null) throw AppException.unauthorized();
+
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    final storagePath = '$userId/${conversationId ?? "misc"}/$timestamp-$fileName';
+    final contentType = mimeType ?? lookupMimeType(fileName) ?? 'application/octet-stream';
+
+    try {
+      await _client.storage.from(bucket).uploadBinary(
+            storagePath,
+            bytes,
+            fileOptions: FileOptions(
+              upsert: true,
+              contentType: contentType,
+            ),
+          );
+
+      final url = _client.storage.from(bucket).getPublicUrl(storagePath);
+
+      return MediaUploadResult(
+        url: url,
+        path: storagePath,
+        fileSize: bytes.length,
+        mimeType: contentType,
+      );
+    } catch (e) {
+      throw AppException.uploadFailed('Failed to upload file');
     }
   }
 

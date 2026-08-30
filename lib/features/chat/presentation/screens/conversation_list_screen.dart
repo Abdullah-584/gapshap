@@ -8,6 +8,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/router/app_router.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../providers/chat_provider.dart';
+import '../../domain/models/conversation.dart';
 
 class ConversationListScreen extends ConsumerStatefulWidget {
   const ConversationListScreen({super.key});
@@ -360,10 +361,10 @@ class _ConversationTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final name = conversation.type.name == 'group'
+    final name = conversation.type == ConversationType.group
         ? (conversation.name ?? 'Group')
         : (conversation.otherDisplayName ?? conversation.otherUsername ?? 'Unknown');
-    final avatar = conversation.type.name == 'group'
+    final avatar = conversation.type == ConversationType.group
         ? conversation.avatarUrl
         : conversation.otherAvatarUrl;
     final lastMessage = conversation.lastMessageContent ?? '';
