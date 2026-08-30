@@ -779,31 +779,14 @@ class MessagesNotifier extends StateNotifier<AsyncValue<List<Message>>> {
     });
   }
 
-  /// Clear chat — mark all messages as deleted for this user (soft delete for everyone)
+  /// Clear chat locally — only affects this user's view.
+  /// Does NOT mutate the database or affect other participants.
   Future<void> clearChat() async {
-    final userId = ref.read(currentUserIdProvider);
-    if (userId == null) return;
-
-    final currentMessages = state.valueOrNull ?? [];
-    final messageIds = currentMessages
-        .where((m) => m.senderId == userId)
-        .map((m) => m.id)
-        .toList();
-
-    // Delete own messages for everyone
-    for (final id in messageIds) {
-      try {
-        await _client.from('messages').update({
-          'is_deleted': true,
-          'content': null,
-        }).eq('id', id);
-      } catch (_) {
-        // Continue deleting others even if one fails
-      }
-    }
-
-    // Clear local state — remove all messages
+    // Clear local state
     state = const AsyncValue.data([]);
+
+    // Clear cache so it doesn't reappear on re-open
+    _cache.clearMessagesCache();
   }
 
   @override
