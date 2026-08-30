@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../domain/models/conversation.dart';
@@ -36,7 +37,7 @@ class ConversationsNotifier extends StateNotifier<AsyncValue<List<Conversation>>
         return;
       }
 
-      // Try RPC first (uses the optimized get_conversations function)
+      // Primary path: RPC (optimized single-query function)
       try {
         final response = await _client.rpc('get_conversations', params: {
           'p_user_id': userId,
@@ -50,13 +51,15 @@ class ConversationsNotifier extends StateNotifier<AsyncValue<List<Conversation>>
         _cache.cacheConversations(conversations);
         _subscribeToUpdates();
         return;
-      } catch (_) {
-        // RPC function may not exist — fall through to direct query
+      } catch (e) {
+        debugPrint('get_conversations RPC failed: $e');
+        // Fall through to direct query
       }
 
-      // Fallback: query tables directly (works even if DB functions are missing)
+      // Fallback: direct table queries (works even if DB functions are missing)
       await _loadConversationsDirect(userId);
     } catch (e, st) {
+      debugPrint('loadConversations failed: $e');
       // Try loading from cache on network error
       final cached = _cache.getCachedConversations();
       if (cached.isNotEmpty) {
@@ -67,15 +70,16 @@ class ConversationsNotifier extends StateNotifier<AsyncValue<List<Conversation>>
     }
   }
 
-  /// Direct query fallback when get_conversations RPC doesn't exist
+  /// Direct query fallback when get_conversations RPC doesn't exist.
+  /// Matches the RPC's behavior: real COUNT(*) for unread, respects
+  /// cleared_at, excludes is_deleted messages, batches with Future.wait.
   Future<void> _loadConversationsDirect(String userId) async {
-    // Get conversation IDs this user belongs to
-    final membersResponse = await _client
+    // 1. Get membership rows (includes cleared_at)
+    final memberRows = await _client
         .from('conversation_members')
-        .select('conversation_id, is_pinned, is_muted, last_read_at')
-        .eq('user_id', userId);
+        .select('conversation_id, is_pinned, is_muted, last_read_at, cleared_at')
+        .eq('user_id', userId) as List;
 
-    final memberRows = membersResponse as List;
     if (memberRows.isEmpty) {
       state = const AsyncValue.data([]);
       _subscribeToUpdates();
@@ -86,127 +90,151 @@ class ConversationsNotifier extends StateNotifier<AsyncValue<List<Conversation>>
         .map((r) => r['conversation_id'] as String)
         .toList();
 
-    // Fetch conversations
-    final convosResponse = await _client
+    // 2. Fetch all conversations in one query
+    final convos = await _client
         .from('conversations')
         .select()
-        .inFilter('id', conversationIds);
+        .inFilter('id', conversationIds) as List;
 
-    final convos = convosResponse as List;
+    // 3. Batch per-conversation lookups with Future.wait
+    final results = await Future.wait(
+      convos.map((convo) async {
+        final convoId = convo['id'] as String;
+        final memberRow = memberRows.firstWhere(
+          (m) => m['conversation_id'] == convoId,
+          orElse: () => null,
+        );
 
-    // Build conversation list with last message info
-    final conversations = <Conversation>[];
-    for (final convo in convos) {
-      final convoId = convo['id'] as String;
-      final memberRow = memberRows.firstWhere(
-        (m) => m['conversation_id'] == convoId,
-        orElse: () => null,
-      );
-
-      // Fetch last message
-      String? lastMessageContent;
-      String? lastMessageSenderId;
-      DateTime? lastMessageCreatedAt;
-      try {
-        final lastMsg = await _client
-            .from('messages')
-            .select('content, sender_id, created_at')
-            .eq('conversation_id', convoId)
-            .order('created_at', ascending: false)
-            .limit(1)
-            .maybeSingle();
-        if (lastMsg != null) {
-          lastMessageContent = lastMsg['content'] as String?;
-          lastMessageSenderId = lastMsg['sender_id'] as String?;
-          lastMessageCreatedAt = lastMsg['created_at'] != null
-              ? DateTime.parse(lastMsg['created_at'] as String)
-              : null;
-        }
-      } catch (_) {}
-
-      // Unread count
-      int unreadCount = 0;
-      if (memberRow != null && lastMessageCreatedAt != null) {
-        final lastRead = memberRow['last_read_at'] != null
-            ? DateTime.parse(memberRow['last_read_at'] as String)
+        final clearedAt = memberRow?['cleared_at'] != null
+            ? DateTime.parse(memberRow!['cleared_at'] as String)
+            : null;
+        final lastReadAt = memberRow?['last_read_at'] != null
+            ? DateTime.parse(memberRow!['last_read_at'] as String)
             : DateTime.fromMillisecondsSinceEpoch(0);
-        if (lastMessageCreatedAt.isAfter(lastRead)) {
-          unreadCount = 1; // Approximate — full count needs a separate query
-        }
-      }
 
-      // For direct conversations, fetch the other user's profile
-      String? otherUserId;
-      String? otherUsername;
-      String? otherDisplayName;
-      String? otherAvatarUrl;
-      bool otherUserIsOnline = false;
-      int memberCount = 1;
-
-      if (convo['type'] == 'direct') {
-        // Get other member
-        final otherMembers = await _client
-            .from('conversation_members')
-            .select('user_id')
-            .eq('conversation_id', convoId)
-            .neq('user_id', userId)
-            .limit(1);
-        if ((otherMembers as List).isNotEmpty) {
-          otherUserId = otherMembers[0]['user_id'] as String;
-          final profile = await _client
-              .from('profiles')
-              .select('username, display_name, avatar_url, is_online')
-              .eq('id', otherUserId)
+        // Fetch last non-deleted message after cleared_at
+        String? lastMessageContent;
+        String? lastMessageSenderId;
+        DateTime? lastMessageCreatedAt;
+        try {
+          var lastMsgQuery = _client
+              .from('messages')
+              .select('content, sender_id, created_at')
+              .eq('conversation_id', convoId)
+              .eq('is_deleted', false);
+          if (clearedAt != null) {
+            lastMsgQuery = lastMsgQuery.gt('created_at', clearedAt.toIso8601String());
+          }
+          final lastMsg = await lastMsgQuery
+              .order('created_at', ascending: false)
+              .limit(1)
               .maybeSingle();
-          if (profile != null) {
-            otherUsername = profile['username'] as String?;
-            otherDisplayName = profile['display_name'] as String?;
-            otherAvatarUrl = profile['avatar_url'] as String?;
-            otherUserIsOnline = profile['is_online'] as bool? ?? false;
+          if (lastMsg != null) {
+            lastMessageContent = lastMsg['content'] as String?;
+            lastMessageSenderId = lastMsg['sender_id'] as String?;
+            lastMessageCreatedAt = DateTime.parse(lastMsg['created_at'] as String);
+          }
+        } catch (e) {
+          debugPrint('Failed to fetch last message for $convoId: $e');
+        }
+
+        // Real unread count: messages from others, after last_read_at AND cleared_at, not deleted
+        int unreadCount = 0;
+        try {
+          var unreadQuery = _client
+              .from('messages')
+              .select('id')
+              .eq('conversation_id', convoId)
+              .neq('sender_id', userId)
+              .eq('is_deleted', false)
+              .gt('created_at', lastReadAt.toIso8601String());
+          if (clearedAt != null) {
+            unreadQuery = unreadQuery.gt('created_at', clearedAt.toIso8601String());
+          }
+          final unreadResult = await unreadQuery;
+          unreadCount = (unreadResult as List).length;
+        } catch (e) {
+          debugPrint('Failed to count unread for $convoId: $e');
+        }
+
+        // Other user profile (for DMs)
+        String? otherUserId;
+        String? otherUsername;
+        String? otherDisplayName;
+        String? otherAvatarUrl;
+        bool otherUserIsOnline = false;
+
+        if (convo['type'] == 'direct') {
+          try {
+            final otherMembers = await _client
+                .from('conversation_members')
+                .select('user_id')
+                .eq('conversation_id', convoId)
+                .neq('user_id', userId)
+                .limit(1) as List;
+            if (otherMembers.isNotEmpty) {
+              otherUserId = otherMembers[0]['user_id'] as String;
+              final profile = await _client
+                  .from('profiles')
+                  .select('username, display_name, avatar_url, is_online')
+                  .eq('id', otherUserId)
+                  .maybeSingle();
+              if (profile != null) {
+                otherUsername = profile['username'] as String?;
+                otherDisplayName = profile['display_name'] as String?;
+                otherAvatarUrl = profile['avatar_url'] as String?;
+                otherUserIsOnline = profile['is_online'] as bool? ?? false;
+              }
+            }
+          } catch (e) {
+            debugPrint('Failed to fetch other user for $convoId: $e');
           }
         }
-      }
 
-      // Member count
-      try {
-        final countResponse = await _client
-            .from('conversation_members')
-            .select('id')
-            .eq('conversation_id', convoId);
-        memberCount = (countResponse as List).length;
-      } catch (_) {}
+        // Member count
+        int memberCount = 1;
+        try {
+          final memberResult = await _client
+              .from('conversation_members')
+              .select('id')
+              .eq('conversation_id', convoId);
+          memberCount = (memberResult as List).length;
+        } catch (e) {
+          debugPrint('Failed to count members for $convoId: $e');
+        }
 
-      conversations.add(Conversation(
-        id: convoId,
-        type: convo['type'] == 'group'
-            ? ConversationType.group
-            : ConversationType.direct,
-        name: convo['name'] as String?,
-        avatarUrl: convo['avatar_url'] as String?,
-        createdBy: convo['created_by'] as String,
-        createdAt: convo['created_at'] != null
-            ? DateTime.parse(convo['created_at'] as String)
-            : null,
-        updatedAt: convo['updated_at'] != null
-            ? DateTime.parse(convo['updated_at'] as String)
-            : null,
-        lastMessageContent: lastMessageContent,
-        lastMessageSenderId: lastMessageSenderId,
-        lastMessageCreatedAt: lastMessageCreatedAt,
-        unreadCount: unreadCount,
-        isPinned: memberRow?['is_pinned'] as bool? ?? false,
-        isMuted: memberRow?['is_muted'] as bool? ?? false,
-        otherUserId: otherUserId,
-        otherUsername: otherUsername,
-        otherDisplayName: otherDisplayName,
-        otherAvatarUrl: otherAvatarUrl,
-        otherUserIsOnline: otherUserIsOnline,
-        memberCount: memberCount,
-      ));
-    }
+        return Conversation(
+          id: convoId,
+          type: convo['type'] == 'group'
+              ? ConversationType.group
+              : ConversationType.direct,
+          name: convo['name'] as String?,
+          avatarUrl: convo['avatar_url'] as String?,
+          createdBy: convo['created_by'] as String,
+          createdAt: convo['created_at'] != null
+              ? DateTime.parse(convo['created_at'] as String)
+              : null,
+          updatedAt: convo['updated_at'] != null
+              ? DateTime.parse(convo['updated_at'] as String)
+              : null,
+          lastMessageContent: lastMessageContent,
+          lastMessageSenderId: lastMessageSenderId,
+          lastMessageCreatedAt: lastMessageCreatedAt,
+          unreadCount: unreadCount,
+          isPinned: memberRow?['is_pinned'] as bool? ?? false,
+          isMuted: memberRow?['is_muted'] as bool? ?? false,
+          otherUserId: otherUserId,
+          otherUsername: otherUsername,
+          otherDisplayName: otherDisplayName,
+          otherAvatarUrl: otherAvatarUrl,
+          otherUserIsOnline: otherUserIsOnline,
+          memberCount: memberCount,
+        );
+      }),
+    );
 
     // Sort: pinned first, then by last message time
-    conversations.sort((a, b) {
+    results.sort((a, b) {
       if (a.isPinned && !b.isPinned) return -1;
       if (!a.isPinned && b.isPinned) return 1;
       final aTime = a.lastMessageCreatedAt ?? a.createdAt ?? DateTime(0);
@@ -214,8 +242,8 @@ class ConversationsNotifier extends StateNotifier<AsyncValue<List<Conversation>>
       return bTime.compareTo(aTime);
     });
 
-    state = AsyncValue.data(conversations);
-    _cache.cacheConversations(conversations);
+    state = AsyncValue.data(results);
+    _cache.cacheConversations(results);
     _subscribeToUpdates();
   }
 

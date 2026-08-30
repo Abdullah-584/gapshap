@@ -59,7 +59,7 @@ class Conversation {
       lastMessageCreatedAt: json['last_message_created_at'] != null
           ? DateTime.parse(json['last_message_created_at'] as String)
           : null,
-      unreadCount: json['unread_count'] as int? ?? 0,
+      unreadCount: int.tryParse(json['unread_count']?.toString() ?? '') ?? 0,
       isPinned: json['is_pinned'] as bool? ?? false,
       isMuted: json['is_muted'] as bool? ?? false,
       otherUserId: json['other_user_id'] as String?,
@@ -67,7 +67,7 @@ class Conversation {
       otherDisplayName: json['other_display_name'] as String?,
       otherAvatarUrl: json['other_avatar_url'] as String?,
       otherUserIsOnline: json['other_user_is_online'] as bool? ?? false,
-      memberCount: json['member_count'] as int? ?? 0,
+      memberCount: int.tryParse(json['member_count']?.toString() ?? '') ?? 0,
     );
   }
 }
