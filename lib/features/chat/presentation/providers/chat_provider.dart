@@ -612,15 +612,198 @@ class MessagesNotifier extends StateNotifier<AsyncValue<List<Message>>> {
   /// Retry sending a failed message
   Future<void> retryMessage(Message message) async {
     final currentMessages = state.valueOrNull ?? [];
-    // Remove the failed message
     state = AsyncValue.data(
       currentMessages.where((m) => m.id != message.id).toList(),
     );
 
-    // Resend
     if (message.type == MessageType.text) {
       sendTextMessage(content: message.content ?? '');
+    } else if (message.type == MessageType.image && message.attachmentUrl != null) {
+      sendImageMessage(attachmentUrl: message.attachmentUrl!);
     }
+  }
+
+  /// Send an image message
+  Future<void> sendImageMessage({
+    required String attachmentUrl,
+    String? content,
+    String? replyToMessageId,
+    String? replyToContent,
+    String? replyToSenderName,
+  }) async {
+    final userId = ref.read(currentUserIdProvider);
+    final profile = ref.read(currentProfileProvider).valueOrNull;
+    if (userId == null) return;
+
+    final optimisticMessage = Message.optimistic(
+      conversationId: conversationId,
+      senderId: userId,
+      type: MessageType.image,
+      content: content,
+      attachmentUrl: attachmentUrl,
+      replyToMessageId: replyToMessageId,
+      replyToContent: replyToContent,
+      replyToSenderName: replyToSenderName,
+      senderName: profile?.displayName,
+      senderAvatarUrl: profile?.avatarUrl,
+    );
+
+    final currentMessages = state.valueOrNull ?? [];
+    state = AsyncValue.data([...currentMessages, optimisticMessage]);
+
+    try {
+      final response = await _client.from('messages').insert({
+        'conversation_id': conversationId,
+        'sender_id': userId,
+        'type': MessageType.image.name,
+        'content': content,
+        'attachment_url': attachmentUrl,
+        'reply_to_message_id': replyToMessageId,
+        'reply_to_content': replyToContent,
+        'reply_to_sender_name': replyToSenderName,
+      }).select().single();
+
+      final updatedMessages = state.valueOrNull ?? [];
+      final updatedList = updatedMessages.map((m) {
+        if (m.id == optimisticMessage.id) {
+          return m.copyWith(
+            id: response['id'] as String,
+            status: MessageStatus.sent,
+            createdAt: DateTime.parse(response['created_at'] as String),
+          );
+        }
+        return m;
+      }).toList();
+      state = AsyncValue.data(updatedList);
+      _cacheMessages();
+    } catch (e) {
+      final updatedMessages = state.valueOrNull ?? [];
+      final updatedList = updatedMessages.map((m) {
+        if (m.id == optimisticMessage.id) {
+          return m.copyWith(status: MessageStatus.failed);
+        }
+        return m;
+      }).toList();
+      state = AsyncValue.data(updatedList);
+    }
+  }
+
+  /// Send a file message
+  Future<void> sendFileMessage({
+    required String attachmentUrl,
+    required String attachmentName,
+    String? attachmentMimeType,
+    int? attachmentSize,
+    String? replyToMessageId,
+    String? replyToContent,
+    String? replyToSenderName,
+  }) async {
+    final userId = ref.read(currentUserIdProvider);
+    final profile = ref.read(currentProfileProvider).valueOrNull;
+    if (userId == null) return;
+
+    final optimisticMessage = Message.optimistic(
+      conversationId: conversationId,
+      senderId: userId,
+      type: MessageType.file,
+      content: attachmentName,
+      attachmentUrl: attachmentUrl,
+      attachmentName: attachmentName,
+      attachmentMimeType: attachmentMimeType,
+      attachmentSize: attachmentSize,
+      replyToMessageId: replyToMessageId,
+      replyToContent: replyToContent,
+      replyToSenderName: replyToSenderName,
+      senderName: profile?.displayName,
+      senderAvatarUrl: profile?.avatarUrl,
+    );
+
+    final currentMessages = state.valueOrNull ?? [];
+    state = AsyncValue.data([...currentMessages, optimisticMessage]);
+
+    try {
+      final response = await _client.from('messages').insert({
+        'conversation_id': conversationId,
+        'sender_id': userId,
+        'type': MessageType.file.name,
+        'content': attachmentName,
+        'attachment_url': attachmentUrl,
+        'attachment_name': attachmentName,
+        'attachment_mime_type': attachmentMimeType,
+        'attachment_size': attachmentSize,
+        'reply_to_message_id': replyToMessageId,
+        'reply_to_content': replyToContent,
+        'reply_to_sender_name': replyToSenderName,
+      }).select().single();
+
+      final updatedMessages = state.valueOrNull ?? [];
+      final updatedList = updatedMessages.map((m) {
+        if (m.id == optimisticMessage.id) {
+          return m.copyWith(
+            id: response['id'] as String,
+            status: MessageStatus.sent,
+            createdAt: DateTime.parse(response['created_at'] as String),
+          );
+        }
+        return m;
+      }).toList();
+      state = AsyncValue.data(updatedList);
+      _cacheMessages();
+    } catch (e) {
+      final updatedMessages = state.valueOrNull ?? [];
+      final updatedList = updatedMessages.map((m) {
+        if (m.id == optimisticMessage.id) {
+          return m.copyWith(status: MessageStatus.failed);
+        }
+        return m;
+      }).toList();
+      state = AsyncValue.data(updatedList);
+    }
+  }
+
+  /// Forward a message to this conversation
+  Future<void> forwardMessage({
+    required String content,
+    String? attachmentUrl,
+    MessageType type = MessageType.text,
+  }) async {
+    final userId = ref.read(currentUserIdProvider);
+    if (userId == null) return;
+
+    await _client.from('messages').insert({
+      'conversation_id': conversationId,
+      'sender_id': userId,
+      'type': type.name,
+      'content': content,
+      'attachment_url': attachmentUrl,
+    });
+  }
+
+  /// Clear chat — mark all messages as deleted for this user (soft delete for everyone)
+  Future<void> clearChat() async {
+    final userId = ref.read(currentUserIdProvider);
+    if (userId == null) return;
+
+    final currentMessages = state.valueOrNull ?? [];
+    final messageIds = currentMessages
+        .where((m) => m.senderId == userId)
+        .map((m) => m.id)
+        .toList();
+
+    // Delete own messages for everyone
+    for (final id in messageIds) {
+      try {
+        await _client.from('messages').update({
+          'is_deleted': true,
+          'content': null,
+        }).eq('id', id);
+      } catch (_) {
+        // Continue deleting others even if one fails
+      }
+    }
+
+    // Clear local state — remove all messages
+    state = const AsyncValue.data([]);
   }
 
   @override

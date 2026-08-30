@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -6,6 +7,8 @@ import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:intl/intl.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:mime/mime.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
@@ -13,6 +16,7 @@ import '../../../../core/config/app_config.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../providers/chat_provider.dart';
 import '../../domain/models/message.dart';
+import '../../../../shared/services/media_service.dart';
 
 class ChatScreen extends ConsumerStatefulWidget {
   final String conversationId;
@@ -681,15 +685,143 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   Future<void> _pickImage(ImageSource source) async {
     final picker = ImagePicker();
     final image = await picker.pickImage(source: source, imageQuality: 80);
-    if (image != null) {
-      // TODO: Upload image and send as message
-      // For now, send as text with file path
-      // In production, upload to Supabase Storage first
+    if (image == null || !mounted) return;
+
+    // Show uploading indicator
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Row(
+          children: [
+            SizedBox(
+              width: 16, height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+            ),
+            SizedBox(width: 12),
+            Text('Uploading image...'),
+          ],
+        ),
+        duration: Duration(seconds: 30),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+
+    try {
+      final mediaService = ref.read(mediaServiceProvider);
+      final result = await mediaService.uploadImage(
+        File(image.path),
+        conversationId: widget.conversationId,
+      );
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+
+      // Send the image message
+      await ref
+          .read(messagesProvider(widget.conversationId).notifier)
+          .sendImageMessage(
+            attachmentUrl: result.url,
+            replyToMessageId: _replyingTo?.id,
+            replyToContent: _replyingTo?.content,
+            replyToSenderName: _replyingTo?.senderName,
+          );
+
+      setState(() => _replyingTo = null);
+
+      // Scroll to bottom
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_scrollController.hasClients) {
+          _scrollController.animateTo(
+            _scrollController.position.maxScrollExtent,
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOut,
+          );
+        }
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text('Failed to send image: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
     }
   }
 
   Future<void> _pickFile() async {
-    // TODO: Implement file picker
+    final files = await FilePicker.pickFiles(type: FileType.any);
+
+    if (files.isEmpty || !mounted) return;
+
+    final file = files.first;
+    if (file.path == null) return;
+
+    // Show uploading indicator
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const SizedBox(
+              width: 16, height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+            ),
+            const SizedBox(width: 12),
+            Text('Uploading ${file.name}...'),
+          ],
+        ),
+        duration: const Duration(seconds: 60),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+
+    try {
+      final mediaService = ref.read(mediaServiceProvider);
+      final result = await mediaService.uploadFile(
+        File(file.path!),
+        conversationId: widget.conversationId,
+      );
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+
+      // Send the file message
+      await ref
+          .read(messagesProvider(widget.conversationId).notifier)
+          .sendFileMessage(
+            attachmentUrl: result.url,
+            attachmentName: file.name,
+            attachmentMimeType: lookupMimeType(file.path!),
+            attachmentSize: await file.length(),
+            replyToMessageId: _replyingTo?.id,
+            replyToContent: _replyingTo?.content,
+            replyToSenderName: _replyingTo?.senderName,
+          );
+
+      setState(() => _replyingTo = null);
+
+      // Scroll to bottom
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_scrollController.hasClients) {
+          _scrollController.animateTo(
+            _scrollController.position.maxScrollExtent,
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOut,
+          );
+        }
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text('Failed to send file: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+    }
   }
 
   void _showDeleteDialog(Message message, bool isMe) {
@@ -747,7 +879,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           TextButton(
             onPressed: () {
               Navigator.pop(context);
-              // TODO: Implement clear chat
+              ref
+                  .read(messagesProvider(widget.conversationId).notifier)
+                  .clearChat();
             },
             child: const Text('Clear', style: TextStyle(color: AppColors.error)),
           ),

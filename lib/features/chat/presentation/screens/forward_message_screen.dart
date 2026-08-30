@@ -135,10 +135,20 @@ class _ForwardMessageScreenState extends ConsumerState<ForwardMessageScreen> {
     );
   }
 
-  void _forwardTo(String conversationId, String name) {
-    // TODO: Actually forward the message via the messages provider
-    // For now, show confirmation and navigate to chat
-    context.showSuccessSnackBar('Message forwarded to $name');
-    context.go('/chat/$conversationId');
+  Future<void> _forwardTo(String conversationId, String name) async {
+    try {
+      // Get the messages notifier for the target conversation
+      final notifier = ref.read(messagesProvider(conversationId).notifier);
+      await notifier.forwardMessage(content: widget.content);
+
+      if (mounted) {
+        context.showSuccessSnackBar('Message forwarded to $name');
+        context.go('/chat/$conversationId');
+      }
+    } catch (e) {
+      if (mounted) {
+        context.showErrorSnackBar('Failed to forward: $e');
+      }
+    }
   }
 }
