@@ -244,10 +244,32 @@ class MessagesNotifier extends StateNotifier<AsyncValue<List<Message>>> {
 
   Future<void> _loadInitialMessages() async {
     try {
-      final response = await _client
+      // Fetch cleared_at for this user in this conversation
+      final userId = ref.read(currentUserIdProvider);
+      DateTime? clearedAt;
+      if (userId != null) {
+        final memberRow = await _client
+            .from('conversation_members')
+            .select('cleared_at')
+            .eq('conversation_id', conversationId)
+            .eq('user_id', userId)
+            .maybeSingle();
+        if (memberRow != null && memberRow['cleared_at'] != null) {
+          clearedAt = DateTime.parse(memberRow['cleared_at'] as String);
+        }
+      }
+
+      // Build query, filtering messages after cleared_at if set
+      var query = _client
           .from('messages')
           .select('*, sender:profiles!messages_sender_id_fkey(id, username, display_name, avatar_url)')
-          .eq('conversation_id', conversationId)
+          .eq('conversation_id', conversationId);
+
+      if (clearedAt != null) {
+        query = query.gt('created_at', clearedAt.toIso8601String());
+      }
+
+      final response = await query
           .order('created_at', ascending: false)
           .limit(AppConfig.messagesPageSize);
 
@@ -779,14 +801,29 @@ class MessagesNotifier extends StateNotifier<AsyncValue<List<Message>>> {
     });
   }
 
-  /// Clear chat locally — only affects this user's view.
-  /// Does NOT mutate the database or affect other participants.
+  /// Clear chat — sets cleared_at on conversation_members for this user.
+  /// Messages before this timestamp are hidden from this user only.
+  /// Other participants are unaffected.
   Future<void> clearChat() async {
+    final userId = ref.read(currentUserIdProvider);
+    if (userId == null) return;
+
+    final now = DateTime.now().toUtc().toIso8601String();
+
+    // Set cleared_at on the DB (persists across sessions/devices)
+    try {
+      await _client.from('conversation_members').update({
+        'cleared_at': now,
+      }).eq('conversation_id', conversationId).eq('user_id', userId);
+    } catch (_) {
+      // Continue with local clear even if DB update fails
+    }
+
     // Clear local state
     state = const AsyncValue.data([]);
 
-    // Clear cache so it doesn't reappear on re-open
-    _cache.clearMessagesCache();
+    // Clear cache for this conversation only
+    _cache.clearConversationMessagesCache(conversationId);
   }
 
   @override

@@ -319,7 +319,12 @@ class CacheService {
     await _contacts?.clear();
   }
 
-  /// Clear messages cache
+  /// Clear messages cache for a specific conversation
+  Future<void> clearConversationMessagesCache(String conversationId) async {
+    await _messages?.delete(conversationId);
+  }
+
+  /// Clear all messages cache
   Future<void> clearMessagesCache() async {
     await _messages?.clear();
   }
