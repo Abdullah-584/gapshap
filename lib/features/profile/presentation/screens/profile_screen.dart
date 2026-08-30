@@ -60,9 +60,9 @@ class ProfileScreen extends ConsumerWidget {
                             child: CachedNetworkImage(
                               imageUrl: data.avatarUrl!,
                               fit: BoxFit.cover,
-                              placeholder: (_, __) => const Icon(Icons.person,
+                              placeholder: (_, _) => const Icon(Icons.person,
                                   size: 48, color: AppColors.textSecondaryDark),
-                              errorWidget: (_, __, ___) => const Icon(
+                              errorWidget: (_, _, _) => const Icon(
                                   Icons.person,
                                   size: 48,
                                   color: AppColors.textSecondaryDark),

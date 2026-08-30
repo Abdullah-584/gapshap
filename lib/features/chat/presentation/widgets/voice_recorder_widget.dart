@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:record/record.dart';
 import 'package:path_provider/path_provider.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -262,7 +261,7 @@ class VoiceMessagePlayer extends StatefulWidget {
 
 class _VoiceMessagePlayerState extends State<VoiceMessagePlayer> {
   bool _isPlaying = false;
-  Duration _currentPosition = Duration.zero;
+  final Duration _currentPosition = Duration.zero;
 
   @override
   Widget build(BuildContext context) {

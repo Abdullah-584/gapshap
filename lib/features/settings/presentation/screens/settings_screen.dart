@@ -72,7 +72,7 @@ class SettingsScreen extends ConsumerWidget {
             trailing: Switch(
               value: true,
               onChanged: (value) {},
-              activeColor: AppColors.primary,
+              activeThumbColor: AppColors.primary,
             ),
           ),
           const SizedBox(height: 16),

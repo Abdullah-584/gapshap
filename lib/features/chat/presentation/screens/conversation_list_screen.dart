@@ -86,11 +86,11 @@ class _ConversationListScreenState
                                   imageUrl:
                                       profile.valueOrNull!.avatarUrl!,
                                   fit: BoxFit.cover,
-                                  placeholder: (_, __) => const Icon(
+                                  placeholder: (_, _) => const Icon(
                                     Icons.person,
                                     color: AppColors.textSecondaryDark,
                                   ),
-                                  errorWidget: (_, __, ___) => const Icon(
+                                  errorWidget: (_, _, _) => const Icon(
                                     Icons.person,
                                     color: AppColors.textSecondaryDark,
                                   ),
@@ -373,9 +373,9 @@ class _ConversationTile extends StatelessWidget {
                     child: CachedNetworkImage(
                       imageUrl: avatar,
                       fit: BoxFit.cover,
-                      placeholder: (_, __) => const Icon(Icons.person,
+                      placeholder: (_, _) => const Icon(Icons.person,
                           color: AppColors.textSecondaryDark),
-                      errorWidget: (_, __, ___) => const Icon(Icons.person,
+                      errorWidget: (_, _, _) => const Icon(Icons.person,
                           color: AppColors.textSecondaryDark),
                     ),
                   )

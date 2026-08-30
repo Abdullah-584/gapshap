@@ -7,33 +7,33 @@ class AppTypography {
   AppTypography._();
 
   // ─── Dark Theme Text Styles ───
-  static TextStyle _darkHeading = GoogleFonts.poppins(
+  static final TextStyle _darkHeading = GoogleFonts.poppins(
     color: AppColors.textPrimaryDark,
     fontWeight: FontWeight.w700,
   );
 
-  static TextStyle _darkBody = GoogleFonts.poppins(
+  static final TextStyle _darkBody = GoogleFonts.poppins(
     color: AppColors.textPrimaryDark,
     fontWeight: FontWeight.w400,
   );
 
-  static TextStyle _darkSecondary = GoogleFonts.poppins(
+  static final TextStyle _darkSecondary = GoogleFonts.poppins(
     color: AppColors.textSecondaryDark,
     fontWeight: FontWeight.w400,
   );
 
   // ─── Light Theme Text Styles ───
-  static TextStyle _lightHeading = GoogleFonts.poppins(
+  static final TextStyle _lightHeading = GoogleFonts.poppins(
     color: AppColors.textPrimaryLight,
     fontWeight: FontWeight.w700,
   );
 
-  static TextStyle _lightBody = GoogleFonts.poppins(
+  static final TextStyle _lightBody = GoogleFonts.poppins(
     color: AppColors.textPrimaryLight,
     fontWeight: FontWeight.w400,
   );
 
-  static TextStyle _lightSecondary = GoogleFonts.poppins(
+  static final TextStyle _lightSecondary = GoogleFonts.poppins(
     color: AppColors.textSecondaryLight,
     fontWeight: FontWeight.w400,
   );

@@ -6,6 +6,7 @@ import '../../domain/models/message.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../../../core/config/app_config.dart';
 import '../../../../shared/services/supabase_service.dart';
+import '../../../../shared/services/cache_service.dart';
 
 // ═══════════════════════════════════════════════
 // Conversations Provider
@@ -23,6 +24,8 @@ class ConversationsNotifier extends StateNotifier<AsyncValue<List<Conversation>>
   ConversationsNotifier(this.ref) : super(const AsyncValue.loading());
 
   SupabaseClient get _client => ref.read(supabaseClientProvider);
+
+  CacheService get _cache => ref.read(cacheServiceProvider);
 
   Future<void> loadConversations() async {
     state = const AsyncValue.loading();
@@ -42,9 +45,19 @@ class ConversationsNotifier extends StateNotifier<AsyncValue<List<Conversation>>
           .toList();
 
       state = AsyncValue.data(conversations);
+
+      // Cache for offline fallback
+      _cache.cacheConversations(conversations);
+
       _subscribeToUpdates();
     } catch (e, st) {
-      state = AsyncValue.error(e, st);
+      // Try loading from cache on network error
+      final cached = _cache.getCachedConversations();
+      if (cached.isNotEmpty) {
+        state = AsyncValue.data(cached);
+      } else {
+        state = AsyncValue.error(e, st);
+      }
     }
   }
 
@@ -69,6 +82,7 @@ class ConversationsNotifier extends StateNotifier<AsyncValue<List<Conversation>>
         .subscribe();
   }
 
+  @override
   void dispose() {
     _channel?.unsubscribe();
     super.dispose();
@@ -226,6 +240,8 @@ class MessagesNotifier extends StateNotifier<AsyncValue<List<Message>>> {
 
   SupabaseClient get _client => ref.read(supabaseClientProvider);
 
+  CacheService get _cache => ref.read(cacheServiceProvider);
+
   Future<void> _loadInitialMessages() async {
     try {
       final response = await _client
@@ -255,13 +271,22 @@ class MessagesNotifier extends StateNotifier<AsyncValue<List<Message>>> {
       _hasMore = messages.length >= AppConfig.messagesPageSize;
       state = AsyncValue.data(messages);
 
+      // Cache for offline fallback
+      _cache.cacheMessages(conversationId, messages);
+
       // Subscribe to new messages
       _subscribeToMessages();
 
       // Mark as read
       _markAsRead();
     } catch (e, st) {
-      state = AsyncValue.error(e, st);
+      // Try loading from cache on network error
+      final cached = _cache.getCachedMessages(conversationId);
+      if (cached.isNotEmpty) {
+        state = AsyncValue.data(cached);
+      } else {
+        state = AsyncValue.error(e, st);
+      }
     }
   }
 
@@ -349,6 +374,7 @@ class MessagesNotifier extends StateNotifier<AsyncValue<List<Message>>> {
           (a.createdAt ?? DateTime(0)).compareTo(b.createdAt ?? DateTime(0)));
 
       state = AsyncValue.data(updatedMessages);
+      _cacheMessages();
 
       // Mark as read if from other user
       if (message.senderId != currentUserId) {
@@ -497,6 +523,7 @@ class MessagesNotifier extends StateNotifier<AsyncValue<List<Message>>> {
         return m;
       }).toList();
       state = AsyncValue.data(updatedList);
+      _cacheMessages();
     } catch (e) {
       // Mark message as failed
       final updatedMessages = state.valueOrNull ?? [];
@@ -507,6 +534,14 @@ class MessagesNotifier extends StateNotifier<AsyncValue<List<Message>>> {
         return m;
       }).toList();
       state = AsyncValue.data(updatedList);
+    }
+  }
+
+  /// Cache current messages list to local storage
+  void _cacheMessages() {
+    final msgs = state.valueOrNull;
+    if (msgs != null && msgs.isNotEmpty) {
+      _cache.cacheMessages(conversationId, msgs);
     }
   }
 
@@ -588,6 +623,7 @@ class MessagesNotifier extends StateNotifier<AsyncValue<List<Message>>> {
     }
   }
 
+  @override
   void dispose() {
     _messagesChannel?.unsubscribe();
     _typingChannel?.unsubscribe();
@@ -642,6 +678,7 @@ class TypingNotifier extends StateNotifier<Set<String>> {
     );
   }
 
+  @override
   void dispose() {
     _channel?.unsubscribe();
     _clearTimer?.cancel();

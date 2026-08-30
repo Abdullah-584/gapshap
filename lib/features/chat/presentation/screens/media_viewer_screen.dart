@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:photo_view/photo_view.dart';
 import 'package:photo_view/photo_view_gallery.dart';
@@ -98,7 +97,7 @@ class MediaViewerScreen extends StatelessWidget {
   }
 
   void _shareImage() {
-    Share.share(imageUrl);
+    SharePlus.instance.share(ShareParams(text: imageUrl));
   }
 
   void _downloadImage(BuildContext context) {
@@ -173,7 +172,7 @@ class AttachmentPreview extends StatelessWidget {
           width: width ?? 220,
           height: height ?? 160,
           fit: BoxFit.cover,
-          placeholder: (_, __) => Container(
+          placeholder: (_, _) => Container(
             width: width ?? 220,
             height: height ?? 160,
             color: AppColors.surfaceDark,
@@ -184,7 +183,7 @@ class AttachmentPreview extends StatelessWidget {
               ),
             ),
           ),
-          errorWidget: (_, __, ___) => Container(
+          errorWidget: (_, _, _) => Container(
             width: width ?? 220,
             height: height ?? 160,
             color: AppColors.surfaceDark,
@@ -208,12 +207,12 @@ class AttachmentPreview extends StatelessWidget {
               width: width ?? 220,
               height: height ?? 160,
               fit: BoxFit.cover,
-              placeholder: (_, __) => Container(
+              placeholder: (_, _) => Container(
                 width: width ?? 220,
                 height: height ?? 160,
                 color: AppColors.surfaceDark,
               ),
-              errorWidget: (_, __, ___) => Container(
+              errorWidget: (_, _, _) => Container(
                 width: width ?? 220,
                 height: height ?? 160,
                 color: AppColors.surfaceDark,

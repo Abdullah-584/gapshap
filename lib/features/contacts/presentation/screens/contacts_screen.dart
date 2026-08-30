@@ -171,9 +171,9 @@ class _ContactTile extends ConsumerWidget {
                     child: CachedNetworkImage(
                       imageUrl: contact.avatarUrl,
                       fit: BoxFit.cover,
-                      placeholder: (_, __) => const Icon(Icons.person,
+                      placeholder: (_, _) => const Icon(Icons.person,
                           color: AppColors.textSecondaryDark),
-                      errorWidget: (_, __, ___) => const Icon(Icons.person,
+                      errorWidget: (_, _, _) => const Icon(Icons.person,
                           color: AppColors.textSecondaryDark),
                     ),
                   )

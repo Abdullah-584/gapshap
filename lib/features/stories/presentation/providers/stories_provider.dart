@@ -23,7 +23,7 @@ class StoriesNotifier extends StateNotifier<AsyncValue<List<Story>>> {
       final twentyFourHoursAgo =
           DateTime.now().subtract(const Duration(hours: 24));
 
-      List<Map<String, dynamic>> response;
+      List<dynamic> response;
 
       if (userId != null) {
         // Load own stories + stories from contacts only (WhatsApp-style)
@@ -33,7 +33,7 @@ class StoriesNotifier extends StateNotifier<AsyncValue<List<Story>>> {
             .select('contact_id')
             .eq('user_id', userId);
 
-        final contactIds = (contactsResponse as List)
+        final contactIds = contactsResponse
             .map((c) => c['contact_id'] as String)
             .toList();
 
@@ -45,7 +45,7 @@ class StoriesNotifier extends StateNotifier<AsyncValue<List<Story>>> {
             .select('*, user:profiles!stories_user_id_fkey(id, username, display_name, avatar_url)')
             .inFilter('user_id', userIds)
             .gte('created_at', twentyFourHoursAgo.toIso8601String())
-            .order('created_at', ascending: false) as List<Map<String, dynamic>>;
+            .order('created_at', ascending: false);
       } else {
         response = [];
       }

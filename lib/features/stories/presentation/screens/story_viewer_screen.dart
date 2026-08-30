@@ -161,13 +161,13 @@ class _StoryViewerScreenState extends ConsumerState<StoryViewerScreen>
               CachedNetworkImage(
                 imageUrl: story.mediaUrl!,
                 fit: BoxFit.cover,
-                placeholder: (_, __) => Container(
+                placeholder: (_, _) => Container(
                   color: AppColors.surfaceDark,
                   child: const Center(
                     child: CircularProgressIndicator(color: AppColors.primary),
                   ),
                 ),
-                errorWidget: (_, __, ___) => Container(
+                errorWidget: (_, _, _) => Container(
                   color: AppColors.surfaceDark,
                   child: const Icon(Icons.error, color: Colors.white),
                 ),
@@ -276,9 +276,9 @@ class _StoryViewerScreenState extends ConsumerState<StoryViewerScreen>
                             child: CachedNetworkImage(
                               imageUrl: story.avatarUrl!,
                               fit: BoxFit.cover,
-                              placeholder: (_, __) => const Icon(Icons.person,
+                              placeholder: (_, _) => const Icon(Icons.person,
                                   color: Colors.white),
-                              errorWidget: (_, __, ___) =>
+                              errorWidget: (_, _, _) =>
                                   const Icon(Icons.person, color: Colors.white),
                             ),
                           )

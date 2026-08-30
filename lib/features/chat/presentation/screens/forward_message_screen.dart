@@ -106,10 +106,10 @@ class _ForwardMessageScreenState extends ConsumerState<ForwardMessageScreen> {
                                 child: CachedNetworkImage(
                                   imageUrl: avatar,
                                   fit: BoxFit.cover,
-                                  placeholder: (_, __) => const Icon(
+                                  placeholder: (_, _) => const Icon(
                                       Icons.person,
                                       color: AppColors.textSecondaryDark),
-                                  errorWidget: (_, __, ___) => const Icon(
+                                  errorWidget: (_, _, _) => const Icon(
                                       Icons.person,
                                       color: AppColors.textSecondaryDark),
                                 ),

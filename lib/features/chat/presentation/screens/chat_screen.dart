@@ -9,6 +9,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/constants/app_constants.dart';
+import '../../../../core/config/app_config.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../providers/chat_provider.dart';
 import '../../domain/models/message.dart';
@@ -62,9 +63,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   }
 
   void _onScroll() {
+    // Dismiss keyboard on scroll
+    if (_focusNode.hasFocus) {
+      _focusNode.unfocus();
+    }
+    // Reached top - load more messages (inverted list: maxScrollExtent = top)
     if (_scrollController.position.pixels ==
         _scrollController.position.maxScrollExtent) {
-      // Reached top - load more messages
       ref.read(messagesProvider(widget.conversationId).notifier).loadMore();
     }
   }
@@ -151,9 +156,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                       child: CachedNetworkImage(
                         imageUrl: _otherUserAvatar!,
                         fit: BoxFit.cover,
-                        placeholder: (_, __) => const Icon(Icons.person,
+                        placeholder: (_, _) => const Icon(Icons.person,
                             color: AppColors.textSecondaryDark, size: 20),
-                        errorWidget: (_, __, ___) => const Icon(Icons.person,
+                        errorWidget: (_, _, _) => const Icon(Icons.person,
                             color: AppColors.textSecondaryDark, size: 20),
                       ),
                     )
@@ -262,7 +267,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                           onReact: (emoji) => ref
                               .read(messagesProvider(widget.conversationId).notifier)
                               .addReaction(message.id, emoji),
-                          onEdit: message.type == MessageType.text && isMe
+                          onEdit: message.type == MessageType.text && isMe &&
+                              _isWithinEditWindow(message)
                               ? () => _startEditing(message)
                               : null,
                           onDelete: () => _showDeleteDialog(message, isMe),
@@ -581,6 +587,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     });
   }
 
+  bool _isWithinEditWindow(Message message) {
+    if (message.createdAt == null) return false;
+    return DateTime.now().difference(message.createdAt!) < AppConfig.editWindow;
+  }
+
   void _scrollToMessage(String messageId) {
     final messages = ref.read(messagesProvider(widget.conversationId)).valueOrNull;
     if (messages == null) return;
@@ -588,10 +599,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final index = messages.indexWhere((m) => m.id == messageId);
     if (index == -1) return;
 
-    // Approximate scroll position
-    final position = index * 80.0; // Approximate message height
+    // Use a two-pass approach: scroll to estimated position, then correct
+    // Since message heights vary, we use a generous estimate
+    final estimatedPosition = (index * 100.0).clamp(
+      0.0,
+      _scrollController.position.maxScrollExtent,
+    );
     _scrollController.animateTo(
-      position,
+      estimatedPosition,
       duration: const Duration(milliseconds: 300),
       curve: Curves.easeOut,
     );

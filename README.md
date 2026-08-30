@@ -98,7 +98,7 @@ A premium social messaging application built with Flutter, Supabase, and Riverpo
 - **PostgreSQL** - Database with RLS
 - **Riverpod** - State management
 - **GoRouter** - Navigation
-- **Isar** - Local caching
+- **Hive** - Local caching
 - **FCM** - Push notifications
 
 ### Project Structure

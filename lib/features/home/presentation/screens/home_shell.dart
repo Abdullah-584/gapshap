@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
+import 'package:go_router/go_router.dart';
 
 import '../../../../core/theme/app_colors.dart';
 
@@ -9,6 +9,9 @@ import '../../../contacts/presentation/screens/contacts_screen.dart';
 import '../../../stories/presentation/screens/stories_screen.dart';
 import '../../../profile/presentation/screens/profile_screen.dart';
 import '../../../../shared/services/update_checker.dart';
+
+/// Tab index → GoRouter path mapping
+const _tabPaths = ['/chats', '/stories', '/contacts', '/profile-tab'];
 
 class HomeShell extends ConsumerStatefulWidget {
   final Widget child;
@@ -39,6 +42,17 @@ class _HomeShellState extends ConsumerState<HomeShell> {
         UpdateChecker.checkOnStartup(context);
       }
     });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Sync tab index from GoRouter location (handles back button / deep links)
+    final location = GoRouterState.of(context).matchedLocation;
+    final idx = _tabPaths.indexOf(location);
+    if (idx != -1 && idx != _currentIndex) {
+      setState(() => _currentIndex = idx);
+    }
   }
 
   @override
@@ -77,7 +91,10 @@ class _HomeShellState extends ConsumerState<HomeShell> {
   Widget _buildNavItem(int index, IconData outlinedIcon, IconData filledIcon, String label) {
     final isSelected = _currentIndex == index;
     return GestureDetector(
-      onTap: () => setState(() => _currentIndex = index),
+      onTap: () {
+        setState(() => _currentIndex = index);
+        context.go(_tabPaths[index]);
+      },
       behavior: HitTestBehavior.opaque,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),

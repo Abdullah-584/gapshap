@@ -34,7 +34,7 @@ class RouteNames {
   static const forgotPassword = '/forgot-password';
   static const emailVerification = '/email-verification';
   static const onboarding = '/onboarding';
-  static const home = '/home';
+  static const home = '/chats';
   static const chat = '/chat/:conversationId';
   static const conversationDetails = '/chat/:conversationId/details';
   static const messageSearch = '/chat/:conversationId/search';
@@ -61,12 +61,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   final refreshNotifier = _GoRouterRefreshNotifier();
 
   // Listen to auth state changes and poke GoRouter to re-evaluate.
-  ref.listen(authStateProvider, (_, __) {
+  ref.listen(authStateProvider, (_, _) {
     refreshNotifier.notify();
   });
 
   return GoRouter(
-    initialLocation: RouteNames.login,
+    initialLocation: RouteNames.home,
     debugLogDiagnostics: false,
     refreshListenable: refreshNotifier,
 
@@ -82,7 +82,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           location == RouteNames.emailVerification;
 
       if (isAuthenticated && isAuthRoute) {
-        return RouteNames.home;
+        return RouteNames.home; // Redirects to first ShellRoute child
       }
 
       // Not authenticated — must be on an auth route
@@ -119,6 +119,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
 
       // Home Shell (with bottom nav)
+      // Note: HomeShell manages its own child routing internally.
+      // The child from ShellRoute is passed to HomeShell but currently unused;
+      // HomeShell renders screens via its own _currentIndex state.
       ShellRoute(
         builder: (context, state, child) => HomeShell(child: child),
         routes: [

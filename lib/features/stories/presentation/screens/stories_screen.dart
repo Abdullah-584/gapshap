@@ -76,10 +76,10 @@ class _StoriesScreenState extends ConsumerState<StoriesScreen> {
                                         imageUrl:
                                             profile.valueOrNull!.avatarUrl!,
                                         fit: BoxFit.cover,
-                                        placeholder: (_, __) => const Icon(
+                                        placeholder: (_, _) => const Icon(
                                             Icons.person,
                                             color: AppColors.textSecondaryDark),
-                                        errorWidget: (_, __, ___) =>
+                                        errorWidget: (_, _, _) =>
                                             const Icon(Icons.person,
                                                 color:
                                                     AppColors.textSecondaryDark),
@@ -238,9 +238,9 @@ class _StoryCard extends StatelessWidget {
                   child: CachedNetworkImage(
                     imageUrl: story.avatarUrl,
                     fit: BoxFit.cover,
-                    placeholder: (_, __) => const Icon(Icons.person,
+                    placeholder: (_, _) => const Icon(Icons.person,
                         color: AppColors.textSecondaryDark),
-                    errorWidget: (_, __, ___) => const Icon(Icons.person,
+                    errorWidget: (_, _, _) => const Icon(Icons.person,
                         color: AppColors.textSecondaryDark),
                   ),
                 )
