@@ -46,7 +46,15 @@ class ProfileNotifier extends StateNotifier<AsyncValue<AppProfile?>> {
   final Ref ref;
 
   ProfileNotifier(this.ref) : super(const AsyncValue.loading()) {
+    // Load profile on creation
     _loadProfile();
+
+    // Reload profile whenever auth state changes (login/logout)
+    ref.listen<String?>(currentUserIdProvider, (previous, next) {
+      if (previous != next) {
+        _loadProfile();
+      }
+    });
   }
 
   SupabaseClient get _client => ref.read(supabaseClientProvider);

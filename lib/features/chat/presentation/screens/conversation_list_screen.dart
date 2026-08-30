@@ -234,22 +234,36 @@ class _ConversationListScreenState
               error: (e, _) => SliverFillRemaining(
                 hasScrollBody: false,
                 child: Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.error_outline,
-                          size: 48, color: AppColors.error),
-                      const SizedBox(height: 16),
-                      Text('Failed to load conversations',
-                          style: TextStyle(color: AppColors.textSecondaryDark)),
-                      const SizedBox(height: 8),
-                      TextButton(
-                        onPressed: () => ref
-                            .read(conversationsProvider.notifier)
-                            .loadConversations(),
-                        child: const Text('Retry'),
-                      ),
-                    ],
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.error_outline,
+                            size: 48, color: AppColors.error),
+                        const SizedBox(height: 16),
+                        const Text('Failed to load conversations',
+                            style: TextStyle(color: AppColors.error)),
+                        const SizedBox(height: 8),
+                        Text(
+                          e.toString(),
+                          textAlign: TextAlign.center,
+                          maxLines: 5,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: AppColors.textSecondaryDark,
+                            fontSize: 12,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        TextButton(
+                          onPressed: () => ref
+                              .read(conversationsProvider.notifier)
+                              .loadConversations(),
+                          child: const Text('Retry'),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),

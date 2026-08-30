@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:timeago/timeago.dart' as timeago;
 import '../../../../core/theme/app_colors.dart';
+import '../../../auth/presentation/providers/auth_provider.dart';
 import '../providers/stories_provider.dart';
 import '../../domain/models/story.dart';
 
@@ -80,6 +81,31 @@ class _StoryViewerScreenState extends ConsumerState<StoryViewerScreen>
       setState(() => _currentIndex--);
       _startStory();
     }
+  }
+
+  void _deleteStory(Story story) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.surfaceDark,
+        title: const Text('Delete Story'),
+        content: const Text('Are you sure you want to delete this story?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              await ref.read(storiesProvider.notifier).deleteStory(story.id);
+              if (mounted) _closeViewer();
+            },
+            child: const Text('Delete', style: TextStyle(color: AppColors.error)),
+          ),
+        ],
+      ),
+    );
   }
 
   void _closeViewer() {
@@ -309,6 +335,12 @@ class _StoryViewerScreenState extends ConsumerState<StoryViewerScreen>
                       ],
                     ),
                   ),
+                  // Delete button (only for own stories)
+                  if (story.userId == ref.watch(currentUserIdProvider))
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline, color: Colors.white),
+                      onPressed: () => _deleteStory(story),
+                    ),
                   IconButton(
                     icon: const Icon(Icons.close, color: Colors.white),
                     onPressed: _closeViewer,
@@ -338,22 +370,25 @@ class _StoryViewerScreenState extends ConsumerState<StoryViewerScreen>
                         textAlign: TextAlign.center,
                       ),
                     ),
-                  const SizedBox(height: 12),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.visibility,
-                          size: 16, color: Colors.white70),
-                      const SizedBox(width: 6),
-                      Text(
-                        '${story.viewCount} views',
-                        style: const TextStyle(
-                          color: Colors.white70,
-                          fontSize: 13,
+                  // View count — only visible to story owner (WhatsApp-style)
+                  if (story.userId == ref.watch(currentUserIdProvider))
+                    const SizedBox(height: 12),
+                  if (story.userId == ref.watch(currentUserIdProvider))
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.visibility,
+                            size: 16, color: Colors.white70),
+                        const SizedBox(width: 6),
+                        Text(
+                          '${story.viewCount} views',
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 13,
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
+                      ],
+                    ),
                 ],
               ),
             ),

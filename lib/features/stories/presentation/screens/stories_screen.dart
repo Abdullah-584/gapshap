@@ -206,12 +206,15 @@ class _StoriesScreenState extends ConsumerState<StoriesScreen> {
   }
 }
 
-class _StoryCard extends StatelessWidget {
+class _StoryCard extends ConsumerWidget {
   final dynamic story;
   const _StoryCard({required this.story});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final currentUserId = ref.watch(currentUserIdProvider);
+    final isOwnStory = story.userId == currentUserId;
+
     return ListTile(
       onTap: () => context.push('/story/${story.userId}'),
       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
@@ -253,13 +256,15 @@ class _StoryCard extends StatelessWidget {
           fontWeight: story.isViewedByMe ? FontWeight.w400 : FontWeight.w600,
         ),
       ),
-      subtitle: Text(
-        '${story.viewCount} views',
-        style: const TextStyle(
-          color: AppColors.textSecondaryDark,
-          fontSize: 13,
-        ),
-      ),
+      subtitle: isOwnStory
+          ? Text(
+              '${story.viewCount} views',
+              style: const TextStyle(
+                color: AppColors.textSecondaryDark,
+                fontSize: 13,
+              ),
+            )
+          : null,
       trailing: story.type == 'video'
           ? const Icon(Icons.videocam, size: 18, color: AppColors.textSecondaryDark)
           : null,
