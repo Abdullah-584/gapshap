@@ -230,6 +230,7 @@ class MessagesNotifier extends StateNotifier<AsyncValue<List<Message>>> {
   RealtimeChannel? _typingChannel;
   RealtimeChannel? _messagesChannel;
   DateTime? _oldestMessageAt;
+  DateTime? _clearedAt;
   bool _hasMore = true;
   bool _isLoadingMore = false;
 
@@ -258,6 +259,7 @@ class MessagesNotifier extends StateNotifier<AsyncValue<List<Message>>> {
           clearedAt = DateTime.parse(memberRow['cleared_at'] as String);
         }
       }
+      _clearedAt = clearedAt;
 
       // Build query, filtering messages after cleared_at if set
       var query = _client
@@ -454,11 +456,18 @@ class MessagesNotifier extends StateNotifier<AsyncValue<List<Message>>> {
     _isLoadingMore = true;
 
     try {
-      final response = await _client
+      var query = _client
           .from('messages')
           .select('*, sender:profiles!messages_sender_id_fkey(id, username, display_name, avatar_url)')
           .eq('conversation_id', conversationId)
-          .lt('created_at', _oldestMessageAt?.toIso8601String() ?? '')
+          .lt('created_at', _oldestMessageAt?.toIso8601String() ?? '');
+
+      // Don't fetch messages before the clear point
+      if (_clearedAt != null) {
+        query = query.gt('created_at', _clearedAt!.toIso8601String());
+      }
+
+      final response = await query
           .order('created_at', ascending: false)
           .limit(AppConfig.messagesPageSize);
 
