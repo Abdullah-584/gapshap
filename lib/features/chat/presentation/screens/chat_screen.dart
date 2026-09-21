@@ -47,15 +47,23 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   }
 
   void _loadConversationDetails() async {
-    final details =
-        await ref.read(conversationDetailsProvider(widget.conversationId).future);
+    final details = await ref.read(
+      conversationDetailsProvider(widget.conversationId).future,
+    );
     if (details != null && mounted) {
       final members = details['members'] as List?;
       final userId = ref.read(currentUserIdProvider);
-      final otherMember = members?.firstWhere(
-        (m) => m['user_id'] != userId,
-        orElse: () => null,
-      );
+      Map<String, dynamic>? otherMember;
+
+      if (members != null) {
+        for (final member in members) {
+          if (member is Map && member['user_id'] != userId) {
+            otherMember = Map<String, dynamic>.from(member);
+            break;
+          }
+        }
+      }
+
       if (otherMember != null) {
         final user = otherMember['user'] as Map<String, dynamic>?;
         setState(() {
@@ -84,13 +92,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     if (text.isEmpty) return;
 
     if (_editingMessage != null) {
-      ref.read(messagesProvider(widget.conversationId).notifier).editMessage(
-            _editingMessage!.id,
-            text,
-          );
+      ref
+          .read(messagesProvider(widget.conversationId).notifier)
+          .editMessage(_editingMessage!.id, text);
       setState(() => _editingMessage = null);
     } else {
-      ref.read(messagesProvider(widget.conversationId).notifier).sendTextMessage(
+      ref
+          .read(messagesProvider(widget.conversationId).notifier)
+          .sendTextMessage(
             content: text,
             replyToMessageId: _replyingTo?.id,
             replyToContent: _replyingTo?.content,
@@ -118,7 +127,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   }
 
   void _sendTypingIndicator() {
-    ref.read(typingProvider(widget.conversationId).notifier).sendTypingIndicator();
+    ref
+        .read(typingProvider(widget.conversationId).notifier)
+        .sendTypingIndicator();
   }
 
   @override
@@ -161,14 +172,23 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                       child: CachedNetworkImage(
                         imageUrl: _otherUserAvatar!,
                         fit: BoxFit.cover,
-                        placeholder: (_, _) => const Icon(Icons.person,
-                            color: AppColors.textSecondaryDark, size: 20),
-                        errorWidget: (_, _, _) => const Icon(Icons.person,
-                            color: AppColors.textSecondaryDark, size: 20),
+                        placeholder: (_, _) => const Icon(
+                          Icons.person,
+                          color: AppColors.textSecondaryDark,
+                          size: 20,
+                        ),
+                        errorWidget: (_, _, _) => const Icon(
+                          Icons.person,
+                          color: AppColors.textSecondaryDark,
+                          size: 20,
+                        ),
                       ),
                     )
-                  : const Icon(Icons.person,
-                      color: AppColors.textSecondaryDark, size: 20),
+                  : const Icon(
+                      Icons.person,
+                      color: AppColors.textSecondaryDark,
+                      size: 20,
+                    ),
             ),
             const SizedBox(width: 12),
             // Name and status
@@ -211,7 +231,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.search, size: 22),
-            onPressed: () => context.push('/chat/${widget.conversationId}/search'),
+            onPressed: () =>
+                context.push('/chat/${widget.conversationId}/search'),
           ),
           PopupMenuButton<String>(
             icon: const Icon(Icons.more_vert, size: 22),
@@ -251,12 +272,16 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 }
                 return ListView.builder(
                   controller: _scrollController,
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
                   itemCount: list.length,
                   itemBuilder: (context, index) {
                     final message = list[index];
                     final isMe = message.senderId == currentUserId;
-                    final showDateSeparator = index == 0 ||
+                    final showDateSeparator =
+                        index == 0 ||
                         !_isSameDay(
                           list[index - 1].createdAt,
                           message.createdAt,
@@ -264,16 +289,23 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
                     return Column(
                       children: [
-                        if (showDateSeparator) _buildDateSeparator(message.createdAt),
+                        if (showDateSeparator)
+                          _buildDateSeparator(message.createdAt),
                         _MessageBubble(
                           message: message,
                           isMe: isMe,
                           onReply: () => setState(() => _replyingTo = message),
                           onReact: (emoji) => ref
-                              .read(messagesProvider(widget.conversationId).notifier)
+                              .read(
+                                messagesProvider(
+                                  widget.conversationId,
+                                ).notifier,
+                              )
                               .addReaction(message.id, emoji),
-                          onEdit: message.type == MessageType.text && isMe &&
-                              _isWithinEditWindow(message)
+                          onEdit:
+                              message.type == MessageType.text &&
+                                  isMe &&
+                                  _isWithinEditWindow(message)
                               ? () => _startEditing(message)
                               : null,
                           onDelete: () => _showDeleteDialog(message, isMe),
@@ -285,11 +317,16 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                           ),
                           onRetry: message.status == MessageStatus.failed
                               ? () => ref
-                                  .read(messagesProvider(widget.conversationId).notifier)
-                                  .retryMessage(message)
+                                    .read(
+                                      messagesProvider(
+                                        widget.conversationId,
+                                      ).notifier,
+                                    )
+                                    .retryMessage(message)
                               : null,
                           onTapReplyPreview: message.replyToMessageId != null
-                              ? () => _scrollToMessage(message.replyToMessageId!)
+                              ? () =>
+                                    _scrollToMessage(message.replyToMessageId!)
                               : null,
                         ),
                         const SizedBox(height: 2),
@@ -305,7 +342,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(Icons.error_outline, color: AppColors.error, size: 48),
+                    const Icon(
+                      Icons.error_outline,
+                      color: AppColors.error,
+                      size: 48,
+                    ),
                     const SizedBox(height: 12),
                     const Text('Failed to load messages'),
                     TextButton(
@@ -355,15 +396,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           Text(
             'Start a conversation',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: AppColors.textSecondaryDark,
-                ),
+              color: AppColors.textSecondaryDark,
+            ),
           ),
           const SizedBox(height: 8),
           Text(
             'Send a message to begin chatting',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: AppColors.textSecondaryDark,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: AppColors.textSecondaryDark),
           ),
         ],
       ),
@@ -503,9 +544,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       ),
       decoration: const BoxDecoration(
         color: AppColors.backgroundDark,
-        border: Border(
-          top: BorderSide(color: AppColors.divider, width: 0.5),
-        ),
+        border: Border(top: BorderSide(color: AppColors.divider, width: 0.5)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
@@ -515,6 +554,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             icon: const Icon(Icons.attach_file, size: 22),
             onPressed: _showAttachmentOptions,
             color: AppColors.textSecondaryDark,
+            tooltip: 'Add attachment',
           ),
           // Text field
           Expanded(
@@ -574,10 +614,16 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 color: AppColors.primary,
               ),
               child: _messageController.text.trim().isNotEmpty
-                  ? const Icon(Icons.send,
-                      color: AppColors.textOnPrimary, size: 20)
-                  : const Icon(Icons.mic,
-                      color: AppColors.textOnPrimary, size: 20),
+                  ? const Icon(
+                      Icons.send,
+                      color: AppColors.textOnPrimary,
+                      size: 20,
+                    )
+                  : const Icon(
+                      Icons.mic,
+                      color: AppColors.textOnPrimary,
+                      size: 20,
+                    ),
             ),
           ),
         ],
@@ -598,7 +644,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   }
 
   void _scrollToMessage(String messageId) {
-    final messages = ref.read(messagesProvider(widget.conversationId)).valueOrNull;
+    final messages = ref
+        .read(messagesProvider(widget.conversationId))
+        .valueOrNull;
     if (messages == null) return;
 
     final index = messages.indexWhere((m) => m.id == messageId);
@@ -694,8 +742,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         content: Row(
           children: [
             SizedBox(
-              width: 16, height: 16,
-              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Colors.white,
+              ),
             ),
             SizedBox(width: 12),
             Text('Uploading image...'),
@@ -780,8 +832,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         content: Row(
           children: [
             const SizedBox(
-              width: 16, height: 16,
-              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Colors.white,
+              ),
             ),
             const SizedBox(width: 12),
             Text('Uploading ${file.name}...'),
@@ -870,7 +926,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               ListTile(
-                leading: const Icon(Icons.delete_outline, color: AppColors.error),
+                leading: const Icon(
+                  Icons.delete_outline,
+                  color: AppColors.error,
+                ),
                 title: const Text('Delete for me'),
                 onTap: () {
                   Navigator.pop(context);
@@ -881,7 +940,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               ),
               if (isMe)
                 ListTile(
-                  leading: const Icon(Icons.delete_forever, color: AppColors.error),
+                  leading: const Icon(
+                    Icons.delete_forever,
+                    color: AppColors.error,
+                  ),
                   title: const Text('Delete for everyone'),
                   onTap: () {
                     Navigator.pop(context);
@@ -915,7 +977,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   .read(messagesProvider(widget.conversationId).notifier)
                   .clearChat();
             },
-            child: const Text('Clear', style: TextStyle(color: AppColors.error)),
+            child: const Text(
+              'Clear',
+              style: TextStyle(color: AppColors.error),
+            ),
           ),
         ],
       ),
@@ -962,8 +1027,6 @@ class _MessageBubble extends StatefulWidget {
 }
 
 class _MessageBubbleState extends State<_MessageBubble> {
-
-
   @override
   Widget build(BuildContext context) {
     final msg = widget.message;
@@ -981,14 +1044,18 @@ class _MessageBubbleState extends State<_MessageBubble> {
             maxWidth: MediaQuery.of(context).size.width * 0.75,
           ),
           child: Column(
-            crossAxisAlignment:
-                widget.isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+            crossAxisAlignment: widget.isMe
+                ? CrossAxisAlignment.end
+                : CrossAxisAlignment.start,
             children: [
               // Reply preview
               if (msg.replyToMessageId != null) _buildReplyPreview(msg),
               // Bubble
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 10,
+                ),
                 decoration: BoxDecoration(
                   color: widget.isMe
                       ? AppColors.outgoingBubbleLight
@@ -1005,14 +1072,17 @@ class _MessageBubbleState extends State<_MessageBubble> {
                   children: [
                     // Text content
                     if (msg.content != null)
-                      Text(
-                        msg.content!,
-                        style: TextStyle(
-                          fontSize: 14.5,
-                          color: widget.isMe
-                              ? AppColors.textOnPrimary
-                              : AppColors.textPrimaryLight,
-                          height: 1.35,
+                      Semantics(
+                        label: 'Message content',
+                        child: Text(
+                          msg.content!,
+                          style: TextStyle(
+                            fontSize: 14.5,
+                            color: widget.isMe
+                                ? AppColors.textOnPrimary
+                                : AppColors.textPrimaryLight,
+                            height: 1.35,
+                          ),
                         ),
                       ),
                     const SizedBox(height: 4),
@@ -1026,7 +1096,9 @@ class _MessageBubbleState extends State<_MessageBubble> {
                             style: TextStyle(
                               fontSize: 10,
                               color: widget.isMe
-                                  ? AppColors.textOnPrimary.withValues(alpha: 0.6)
+                                  ? AppColors.textOnPrimary.withValues(
+                                      alpha: 0.6,
+                                    )
                                   : AppColors.textSecondaryLight,
                             ),
                           ),
@@ -1061,11 +1133,18 @@ class _MessageBubbleState extends State<_MessageBubble> {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.error_outline, size: 14, color: AppColors.error),
+                        Icon(
+                          Icons.error_outline,
+                          size: 14,
+                          color: AppColors.error,
+                        ),
                         SizedBox(width: 4),
                         Text(
                           'Failed. Tap to retry.',
-                          style: TextStyle(fontSize: 11, color: AppColors.error),
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: AppColors.error,
+                          ),
                         ),
                       ],
                     ),
@@ -1145,9 +1224,12 @@ class _MessageBubbleState extends State<_MessageBubble> {
   }
 
   Widget _buildStatusIcon(MessageStatus status) {
+    String label;
+    Widget icon;
     switch (status) {
       case MessageStatus.sending:
-        return const SizedBox(
+        label = 'sending';
+        icon = const SizedBox(
           width: 12,
           height: 12,
           child: CircularProgressIndicator(
@@ -1155,17 +1237,38 @@ class _MessageBubbleState extends State<_MessageBubble> {
             color: Colors.white54,
           ),
         );
+        break;
       case MessageStatus.sent:
-        return Icon(Icons.check, size: 14,
-            color: AppColors.textOnPrimary.withValues(alpha: 0.6));
+        label = 'sent';
+        icon = Icon(
+          Icons.check,
+          size: 14,
+          color: AppColors.textOnPrimary.withValues(alpha: 0.6),
+        );
+        break;
       case MessageStatus.delivered:
-        return Icon(Icons.done_all, size: 14,
-            color: AppColors.textOnPrimary.withValues(alpha: 0.6));
+        label = 'delivered';
+        icon = Icon(
+          Icons.done_all,
+          size: 14,
+          color: AppColors.textOnPrimary.withValues(alpha: 0.6),
+        );
+        break;
       case MessageStatus.read:
-        return const Icon(Icons.done_all, size: 14, color: Colors.white70);
+        label = 'read';
+        icon = const Icon(Icons.done_all, size: 14, color: Colors.white70);
+        break;
       case MessageStatus.failed:
-        return const Icon(Icons.error_outline, size: 14, color: AppColors.error);
+        label = 'failed';
+        icon = const Icon(
+          Icons.error_outline,
+          size: 14,
+          color: AppColors.error,
+        );
+        break;
     }
+
+    return Semantics(label: 'Message status: $label', child: icon);
   }
 
   Widget _buildReactions(Message msg) {
@@ -1179,10 +1282,7 @@ class _MessageBubbleState extends State<_MessageBubble> {
             decoration: BoxDecoration(
               color: AppColors.surfaceDark,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: AppColors.divider,
-                width: 0.5,
-              ),
+              border: Border.all(color: AppColors.divider, width: 0.5),
             ),
             child: Text(
               '${entry.key} ${entry.value.length}',
@@ -1248,7 +1348,8 @@ class _MessageBubbleState extends State<_MessageBubble> {
               onTap: () {
                 Navigator.pop(context);
                 Clipboard.setData(
-                    ClipboardData(text: widget.message.content ?? ''));
+                  ClipboardData(text: widget.message.content ?? ''),
+                );
               },
             ),
             ListTile(
@@ -1269,10 +1370,15 @@ class _MessageBubbleState extends State<_MessageBubble> {
                 },
               ),
             ListTile(
-              leading: const Icon(Icons.delete_outline, size: 22,
-                  color: AppColors.error),
-              title: const Text('Delete',
-                  style: TextStyle(color: AppColors.error)),
+              leading: const Icon(
+                Icons.delete_outline,
+                size: 22,
+                color: AppColors.error,
+              ),
+              title: const Text(
+                'Delete',
+                style: TextStyle(color: AppColors.error),
+              ),
               onTap: () {
                 Navigator.pop(context);
                 widget.onDelete();

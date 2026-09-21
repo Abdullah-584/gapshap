@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../features/auth/presentation/providers/auth_provider.dart';
 import '../../features/auth/presentation/screens/login_screen.dart';
@@ -55,6 +56,51 @@ class RouteNames {
   static const mediaViewer = '/media-viewer';
 }
 
+@visibleForTesting
+String? resolveAuthRedirect({
+  required bool isAuthenticated,
+  required String location,
+  required bool isProfileLoading,
+  required bool hasProfile,
+  required User? user,
+}) {
+  final isAuthRoute = location == RouteNames.login ||
+      location == RouteNames.signup ||
+      location == RouteNames.forgotPassword ||
+      location == RouteNames.emailVerification;
+
+  if (isAuthenticated) {
+    if (location == RouteNames.emailVerification) {
+      final emailConfirmed = user?.emailConfirmedAt != null;
+      return emailConfirmed ? RouteNames.home : null;
+    }
+
+    if (location == RouteNames.onboarding) {
+      return null;
+    }
+
+    if (isProfileLoading) {
+      return null;
+    }
+
+    if (!hasProfile) {
+      return RouteNames.onboarding;
+    }
+
+    if (isAuthRoute) {
+      return RouteNames.home;
+    }
+
+    return null;
+  }
+
+  if (!isAuthRoute) {
+    return RouteNames.login;
+  }
+
+  return null;
+}
+
 /// App Router Provider
 ///
 /// Uses `ref.listen` (not `ref.watch`) so GoRouter is created once.
@@ -75,25 +121,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 
     redirect: (context, state) {
       final authState = ref.read(authStateProvider);
+      final profileState = ref.read(currentProfileProvider);
       final isAuthenticated = authState.valueOrNull != null;
       final location = state.matchedLocation;
+      final profile = profileState.valueOrNull;
 
-      // Auth routes — redirect to home if already logged in
-      final isAuthRoute = location == RouteNames.login ||
-          location == RouteNames.signup ||
-          location == RouteNames.forgotPassword ||
-          location == RouteNames.emailVerification;
-
-      if (isAuthenticated && isAuthRoute) {
-        return RouteNames.home;
-      }
-
-      // Not authenticated — must be on an auth route
-      if (!isAuthenticated && !isAuthRoute) {
-        return RouteNames.login;
-      }
-
-      return null; // No redirect needed
+      return resolveAuthRedirect(
+        isAuthenticated: isAuthenticated,
+        location: location,
+        isProfileLoading: profileState.isLoading,
+        hasProfile: profile != null,
+        user: authState.valueOrNull,
+      );
     },
 
     routes: [
@@ -129,27 +168,23 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         routes: [
           GoRoute(
             path: '/chats',
-            pageBuilder: (context, state) => const NoTransitionPage(
-              child: ConversationListScreen(),
-            ),
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: ConversationListScreen()),
           ),
           GoRoute(
             path: '/stories',
-            pageBuilder: (context, state) => const NoTransitionPage(
-              child: StoriesScreen(),
-            ),
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: StoriesScreen()),
           ),
           GoRoute(
             path: '/contacts',
-            pageBuilder: (context, state) => const NoTransitionPage(
-              child: ContactsScreen(),
-            ),
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: ContactsScreen()),
           ),
           GoRoute(
             path: '/profile-tab',
-            pageBuilder: (context, state) => const NoTransitionPage(
-              child: ProfileScreen(),
-            ),
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: ProfileScreen()),
           ),
         ],
       ),
@@ -181,10 +216,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) {
           final messageId = state.uri.queryParameters['messageId'] ?? '';
           final content = state.uri.queryParameters['content'] ?? '';
-          return ForwardMessageScreen(
-            messageId: messageId,
-            content: content,
-          );
+          return ForwardMessageScreen(messageId: messageId, content: content);
         },
       ),
 
@@ -247,7 +279,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           final url = state.uri.queryParameters['url'] ?? '';
           final tag = state.uri.queryParameters['tag'];
           final isLocal = state.uri.queryParameters['local'] == 'true';
-          return MediaViewerScreen(imageUrl: url, heroTag: tag, isLocal: isLocal);
+          return MediaViewerScreen(
+            imageUrl: url,
+            heroTag: tag,
+            isLocal: isLocal,
+          );
         },
       ),
     ],
@@ -267,5 +303,3 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 class _GoRouterRefreshNotifier extends ChangeNotifier {
   void notify() => notifyListeners();
 }
-
-

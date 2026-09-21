@@ -125,11 +125,28 @@ class UserProfileScreen extends ConsumerWidget {
                     ],
                   )
                 else if (profile.lastSeen != null)
-                  Text(
-                    'Last seen ${profile.lastSeen}',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: AppColors.textSecondaryDark,
-                        ),
+                  Builder(
+                    builder: (context) {
+                      final diff = DateTime.now().difference(profile.lastSeen!);
+                      String text;
+                      if (diff.inMinutes < 1) {
+                        text = 'Last seen just now';
+                      } else if (diff.inHours < 1) {
+                        text = 'Last seen ${diff.inMinutes}m ago';
+                      } else if (diff.inDays < 1) {
+                        text = 'Last seen ${diff.inHours}h ago';
+                      } else if (diff.inDays < 7) {
+                        text = 'Last seen ${diff.inDays}d ago';
+                      } else {
+                        text = 'Last seen ${profile.lastSeen!.day}/${profile.lastSeen!.month}/${profile.lastSeen!.year}';
+                      }
+                      return Text(
+                        text,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: AppColors.textSecondaryDark,
+                            ),
+                      );
+                    },
                   ),
 
                 const SizedBox(height: 16),

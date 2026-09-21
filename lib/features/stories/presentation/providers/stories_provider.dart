@@ -20,8 +20,7 @@ class StoriesNotifier extends StateNotifier<AsyncValue<List<Story>>> {
     state = const AsyncValue.loading();
     try {
       final userId = ref.read(currentUserIdProvider);
-      final twentyFourHoursAgo =
-          DateTime.now().subtract(const Duration(hours: 24));
+      final now = DateTime.now().toUtc();
 
       List<dynamic> response;
 
@@ -40,11 +39,12 @@ class StoriesNotifier extends StateNotifier<AsyncValue<List<Story>>> {
         // Build query: own stories + contact stories
         final userIds = [userId, ...contactIds];
 
+        // Filter by expires_at instead of created_at > 24h
         response = await _client
             .from('stories')
             .select('*, user:profiles!stories_user_id_fkey(id, username, display_name, avatar_url)')
             .inFilter('user_id', userIds)
-            .gte('created_at', twentyFourHoursAgo.toIso8601String())
+            .gt('expires_at', now.toIso8601String())
             .order('created_at', ascending: false);
       } else {
         response = [];
@@ -132,14 +132,13 @@ class StoriesNotifier extends StateNotifier<AsyncValue<List<Story>>> {
   /// Get stories for a specific user
   Future<List<Story>> getUserStories(String userId) async {
     try {
-      final twentyFourHoursAgo =
-          DateTime.now().subtract(const Duration(hours: 24));
+      final now = DateTime.now().toUtc();
 
       final response = await _client
           .from('stories')
           .select()
           .eq('user_id', userId)
-          .gte('created_at', twentyFourHoursAgo.toIso8601String())
+          .gt('expires_at', now.toIso8601String())
           .order('created_at', ascending: true);
 
       return (response as List)

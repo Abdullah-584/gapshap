@@ -6,6 +6,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../providers/stories_provider.dart';
+import '../../domain/models/story.dart';
 
 class StoriesScreen extends ConsumerStatefulWidget {
   const StoriesScreen({super.key});
@@ -265,7 +266,7 @@ class _StoryCard extends ConsumerWidget {
               ),
             )
           : null,
-      trailing: story.type == 'video'
+      trailing: story.type == StoryType.video
           ? const Icon(Icons.videocam, size: 18, color: AppColors.textSecondaryDark)
           : null,
     );

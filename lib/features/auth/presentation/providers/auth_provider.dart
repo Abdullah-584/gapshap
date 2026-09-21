@@ -39,15 +39,17 @@ final currentUserIdProvider = Provider<String?>((ref) {
 /// Current user profile provider
 final currentProfileProvider =
     StateNotifierProvider<ProfileNotifier, AsyncValue<AppProfile?>>((ref) {
-  return ProfileNotifier(ref);
-});
+      return ProfileNotifier(ref);
+    });
 
 class ProfileNotifier extends StateNotifier<AsyncValue<AppProfile?>> {
   final Ref ref;
 
-  ProfileNotifier(this.ref) : super(const AsyncValue.loading()) {
-    // Load profile on creation
-    _loadProfile();
+  ProfileNotifier(this.ref, {bool autoLoad = true})
+    : super(const AsyncValue.loading()) {
+    if (autoLoad) {
+      _loadProfile();
+    }
 
     // Reload profile whenever auth state changes (login/logout)
     ref.listen<String?>(currentUserIdProvider, (previous, next) {
@@ -74,7 +76,8 @@ class ProfileNotifier extends StateNotifier<AsyncValue<AppProfile?>> {
           .maybeSingle();
 
       if (response != null) {
-        state = AsyncValue.data(AppProfile.fromSupabase(response));
+        final profile = AppProfile.fromSupabase(response);
+        state = AsyncValue.data(profile);
       } else {
         state = const AsyncValue.data(null);
       }
@@ -96,13 +99,17 @@ class ProfileNotifier extends StateNotifier<AsyncValue<AppProfile?>> {
     state = const AsyncValue.loading();
 
     try {
-      final response = await _client.from('profiles').upsert({
-        'id': userId,
-        'username': username.toLowerCase(),
-        'display_name': displayName,
-        'bio': bio,
-        'avatar_url': avatarUrl,
-      }).select().single();
+      final response = await _client
+          .from('profiles')
+          .upsert({
+            'id': userId,
+            'username': username.toLowerCase(),
+            'display_name': displayName,
+            'bio': bio,
+            'avatar_url': avatarUrl,
+          })
+          .select()
+          .single();
 
       state = AsyncValue.data(AppProfile.fromSupabase(response));
     } catch (e, st) {
@@ -210,15 +217,9 @@ class ProfileNotifier extends StateNotifier<AsyncValue<AppProfile?>> {
   }
 
   /// Sign up
-  Future<void> signUp({
-    required String email,
-    required String password,
-  }) async {
+  Future<void> signUp({required String email, required String password}) async {
     try {
-      await _client.auth.signUp(
-        email: email,
-        password: password,
-      );
+      await _client.auth.signUp(email: email, password: password);
     } on AuthException catch (e) {
       throw Exception(e.message);
     } catch (e) {
@@ -227,15 +228,9 @@ class ProfileNotifier extends StateNotifier<AsyncValue<AppProfile?>> {
   }
 
   /// Sign in
-  Future<void> signIn({
-    required String email,
-    required String password,
-  }) async {
+  Future<void> signIn({required String email, required String password}) async {
     try {
-      await _client.auth.signInWithPassword(
-        email: email,
-        password: password,
-      );
+      await _client.auth.signInWithPassword(email: email, password: password);
     } on AuthException catch (e) {
       throw Exception(e.message);
     } catch (e) {
@@ -265,9 +260,7 @@ class ProfileNotifier extends StateNotifier<AsyncValue<AppProfile?>> {
   /// Update password
   Future<void> updatePassword(String newPassword) async {
     try {
-      await _client.auth.updateUser(
-        UserAttributes(password: newPassword),
-      );
+      await _client.auth.updateUser(UserAttributes(password: newPassword));
     } on AuthException catch (e) {
       throw Exception(e.message);
     }
@@ -279,9 +272,13 @@ class ProfileNotifier extends StateNotifier<AsyncValue<AppProfile?>> {
     if (userId == null) throw Exception('Not authenticated');
 
     try {
-      // Delete profile data (RLS handles the rest)
+      // Delete profile — CASCADE will remove contacts, blocked_users,
+      // conversation_members, messages, stories, etc.
       await _client.from('profiles').delete().eq('id', userId);
-      await _client.auth.admin.deleteUser(userId);
+      // Sign out after deletion (auth user stays but profile is gone,
+      // so redirect to login)
+      await _client.auth.signOut();
+      state = const AsyncValue.data(null);
     } catch (e) {
       rethrow;
     }
